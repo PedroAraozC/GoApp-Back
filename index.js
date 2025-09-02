@@ -17,6 +17,10 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/conductores", conductorRoutes);
 app.use("/usuarios", usuarioRoutes);
 
+app.get("/", (req, res) => {
+  res.send ("Omar se la come");
+});
+
 // Iniciar servidor
 app.listen(PORT, () => {
   console.log(`Servidor escuchando en http://localhost:${PORT} :D`);
