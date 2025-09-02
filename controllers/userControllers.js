@@ -1,7 +1,25 @@
 const bcrypt = require("bcryptjs");
-const conectarBDMySql = require("../config/dbMYSQL");
+const { conectarBDMySql } = require("../config/dbMYSQL");
 
 //FUNCION A MODO DE EJEMPLO
+
+const obtenerUsuarios = async (req, res) => {
+  let connection;
+  try {
+    connection = await conectarBDMySql();
+    console.log("first");
+    const result = await connection.execute("SELECT * FROM usuarios ");
+    console.log(result);
+    res.json({ generos: result[0] });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  } finally {
+    if (connection) {
+      await connection.end();
+    }
+  }
+};
+
 const login = async (req, res) => {
   // La funcion es asoncrónica para manejar operaciones de base de datos y esperar respuestas
 
@@ -83,4 +101,4 @@ const login = async (req, res) => {
   }
 };
 // 16. Exportar la función login
-module.exports = { login };
+module.exports = { login, obtenerUsuarios };
