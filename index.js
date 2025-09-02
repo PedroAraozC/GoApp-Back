@@ -18,11 +18,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/conductores", conductorRoutes);
 
 app.use("/usuarios", usuarioRoutes);
-
-app.get("/", (req, res) => {
-  res.send ("Omar se la come");
-});
-
 app.use("/generos", generoRoutes);
 
 app.listen(PORT, () => {
