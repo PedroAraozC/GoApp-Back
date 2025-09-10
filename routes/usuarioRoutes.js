@@ -1,10 +1,16 @@
 const { Router } = require("express");
-const { login, obtenerUsuarios} = require("../controllers/userControllers");
+const {
+  obtenerUsuarios,
+  crearUsuario,
+  actualizarUsuario,
+  eliminarUsuario,
+} = require("../controllers/userControllers");
 
 const router = Router();
 
-// Ruta para el login de usuario
-router.post("/login", login); 
 router.get("/obtenerUsuarios", obtenerUsuarios);
+router.post("/crearUsuario", crearUsuario);
+router.put("/actualizarUsuario/:id", actualizarUsuario);
+router.put("/eliminarUsuario/:id", eliminarUsuario);
 
 module.exports = router;
