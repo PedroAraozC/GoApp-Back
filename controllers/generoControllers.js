@@ -66,7 +66,7 @@ const editaGenero = async (req, res) => {
 const eliminaGenero = async (req, res) => {
   let connection;
   try {
-    const { id_genero } = req.body;
+    const { id_genero, nombre_genero } = req.body;
 
     connection = await conectarBDMySql();
 
@@ -76,7 +76,7 @@ const eliminaGenero = async (req, res) => {
     );
 
     res.json({
-      message: `Se actualizó correctamente el estado del género con ID: ${id_genero}`,
+      message: `Se actualizó correctamente el estado del género con ID: ${nombre_genero}`,
       status: "ok",
     });
   } catch (error) {
