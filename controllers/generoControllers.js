@@ -15,11 +15,7 @@ const obtenerGenero = async (req, res) => {
   }
 };
 
-// CRUD
-// C create
-// R read
-// U update
-// D delete
+
 
 const altaGenero = async (req, res) => {
   let connection;
@@ -40,6 +36,8 @@ const altaGenero = async (req, res) => {
     }
   }
 };
+
+
 const editaGenero = async (req, res) => {
   let connection;
   try {
@@ -65,4 +63,30 @@ const editaGenero = async (req, res) => {
   }
 };
 
-module.exports = { obtenerGenero, altaGenero, editaGenero };
+const eliminaGenero = async (req, res) => {
+  let connection;
+  try {
+    const { id_genero, nombre_genero } = req.body;
+
+    connection = await conectarBDMySql();
+
+    const [result] = await connection.execute(
+      "UPDATE generos SET habilita = 0 WHERE id_genero = ?",
+      [id_genero]
+    );
+
+    res.json({
+      message: `Se actualizó correctamente el estado del género con ID: ${nombre_genero}`,
+      status: "ok",
+    });
+  } catch (error) {
+    console.error("Hubo un error :(", error);
+    res.status(500).json({ message: "Error en el servidor" });
+  } finally {
+    if (connection) {
+      await connection.end();
+    }
+  }
+};
+
+module.exports = { obtenerGenero, altaGenero, editaGenero, eliminaGenero };
