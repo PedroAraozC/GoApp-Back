@@ -22,12 +22,13 @@ const obtenerUsuarios = async (req, res) => {
 const obtenerUsuarioId = async (req, res) => {
   let connection;
   let { id } = req.params;
-
   try {
     connection = await conectarBDMySql();
     const result = await connection.execute(
-      "SELECT * FROM usuarios WHERE id_usuario = ?"[id]
+      "SELECT * FROM usuarios WHERE id_usuario = ?",
+      [id]
     );
+    console.log(result[0], "aaaaaa");
     res.json({ result: result[0] });
   } catch (error) {
     return res
@@ -103,33 +104,14 @@ const actualizarUsuario = async (req, res) => {
 
   try {
     let { id } = req.params;
-    let {
-      nombre_usuario,
-      apellido_usuario,
-      dni,
-      fecha_nacimiento,
-      id_genero,
-      password,
-      telefono_usuario,
-      email_usuario,
-      id_rol,
-    } = req.body;
+    let { dni, fecha_nacimiento, id_genero, telefono_usuario, email } =
+      req.body;
     connection = await conectarBDMySql();
-
+    console.log(req.params, "req params");
+    console.log(req.body, "req body");
     const result = await connection.execute(
-      "UPDATE usuarios SET nombre_usuario = ?, apellido_usuario = ?, dni = ?, fecha_nacimiento = ?, id_genero = ?, password = ?, telefono_usuario = ?, email_usuario = ?, id_rol = ? WHERE id_usuario = ?",
-      [
-        nombre_usuario,
-        apellido_usuario,
-        dni,
-        fecha_nacimiento,
-        id_genero,
-        password,
-        telefono_usuario,
-        email_usuario,
-        id_rol,
-        id,
-      ]
+      "UPDATE usuarios SET  dni = ?, fecha_nacimiento = ?, id_genero = ?,telefono_usuario = ?, email_usuario = ? WHERE id_usuario = ?",
+      [dni, fecha_nacimiento, id_genero, telefono_usuario, email, id]
     );
 
     res.json({ message: "Usuario actualizado exitosamente", status: "OK" });
@@ -147,7 +129,7 @@ const actualizarUsuario = async (req, res) => {
 const eliminarUsuario = async (req, res) => {
   let connection;
 
-  try {
+  try { 
     const { id } = req.params;
     connection = await conectarBDMySql();
 
