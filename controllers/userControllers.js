@@ -1,8 +1,6 @@
 const bcrypt = require("bcryptjs");
 const { conectarBDMySql } = require("../config/dbMYSQL");
 
-//FUNCION A MODO DE EJEMPLO
-
 const obtenerUsuarios = async (req, res) => {
   let connection;
 
