@@ -27,6 +27,7 @@ const obtenerUsuarioId = async (req, res) => {
   let connection;
   let { id } = req.params;
   try {
+    console.log(id);
     connection = await conectarBDMySql();
     const result = await connection.execute(
       "SELECT * FROM usuarios WHERE id_usuario = ?",
@@ -48,7 +49,7 @@ const obtenerUsuarioId = async (req, res) => {
 const login = async (req, res) => {
   let connection;
   let { email, password } = req.body;
-
+  console.log(req.body);
   try {
     connection = await conectarBDMySql();
 
@@ -56,7 +57,7 @@ const login = async (req, res) => {
       "SELECT * FROM usuarios WHERE email_usuario = ?",
       [email]
     );
-
+    console.log(rows);
     if (rows.length === 0)
       return res.status(404).json({ message: "Usuario no encontrado." });
 
@@ -104,7 +105,7 @@ const google_login = async (req, res) => {
 
     const payload = ticket.getPayload();
     const { sub: google_id, email, name, picture } = payload;
-
+    console.log(payload);
     if (!email) {
       return res
         .status(400)
@@ -112,7 +113,7 @@ const google_login = async (req, res) => {
     }
 
     connection = await conectarBDMySql();
-
+    console.log(email);
     const [existingUser] = await connection.execute(
       "SELECT * FROM usuarios WHERE email_usuario = ? OR google_id = ?",
       [email, google_id]
