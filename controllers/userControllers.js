@@ -1,6 +1,10 @@
 const bcrypt = require("bcryptjs");
 const { conectarBDMySql } = require("../config/dbMYSQL");
-const client = new OAuth2Client('125703789007-thjq5cpij6blij34sv8g404pq6ubnhjv.apps.googleusercontent.com');
+const { OAuth2Client } = require("google-auth-library");
+
+const client = new OAuth2Client(
+  "125703789007-thjq5cpij6blij34sv8g404pq6ubnhjv.apps.googleusercontent.com"
+);
 
 const obtenerUsuarios = async (req, res) => {
   let connection;
@@ -42,7 +46,7 @@ const obtenerUsuarioId = async (req, res) => {
 
 const login = async (req, res) => {
   let connection;
-  let {email, password} = req.body;
+  let { email, password } = req.body;
   try {
     connection = await conectarBDMySql();
     const result = await connection.execute(
@@ -50,13 +54,12 @@ const login = async (req, res) => {
       [email, password]
     );
     console.log(result[0], "Login");
-    if (result [0].length>0)
-      res.json({ result: result[0] });
-    else {res.json({result: "Los datos no coinciden."})    }
+    if (result[0].length > 0) res.json({ result: result[0] });
+    else {
+      res.json({ result: "Los datos no coinciden." });
+    }
   } catch (error) {
-    return res
-      .status(500)
-      .json({ message: "Error en el login." });
+    return res.status(500).json({ message: "Error en el login." });
   } finally {
     if (connection) {
       await connection.end();
@@ -65,64 +68,74 @@ const login = async (req, res) => {
 };
 
 const google_login = async (req, res) => {
-    const { token } = req.body;
-    let connection;
+  const { token } = req.body;
+  let connection;
 
-    if (!token) {
-        return res.status(400).json({ message: "No se proporcionó el token." });
+  if (!token) {
+    return res.status(400).json({ message: "No se proporcionó el token." });
+  }
+
+  try {
+    // 1. Verificar el token de identidad con Google
+    const ticket = await client.verifyIdToken({
+      idToken: token,
+      audience:
+        "125703789007-thjq5cpij6blij34sv8g404pq6ubnhjv.apps.googleusercontent.com",
+    });
+    const payload = ticket.getPayload();
+    const { email, name, picture } = payload;
+
+    if (!email) {
+      return res
+        .status(400)
+        .json({ message: "No se pudo obtener el email de Google." });
     }
 
-    try {
-        // 1. Verificar el token de identidad con Google
-        const ticket = await client.verifyIdToken({
-            idToken: token,
-            audience: '125703789007-thjq5cpij6blij34sv8g404pq6ubnhjv.apps.googleusercontent.com',
-        });
-        const payload = ticket.getPayload();
-        const { email, name, picture } = payload;
+    connection = await conectarBDMySql();
+    console.log(payload, "payload");
+    // 2. Buscar si el usuario ya existe en la base de datos
+    const [existingUser] = await connection.execute(
+      "SELECT * FROM usuarios WHERE email_usuario = ?",
+      [email]
+    );
 
-        if (!email) {
-            return res.status(400).json({ message: "No se pudo obtener el email de Google." });
-        }
+    if (existingUser.length > 0) {
+      // 3. Si el usuario existe, iniciar sesión y devolver sus datos
+      console.log("Usuario encontrado:", existingUser[0]);
+      // Aquí podrías generar un JWT para la sesión
+      res.json({
+        result: existingUser[0],
+        message: "Inicio de sesión exitoso.",
+      });
+    } else {
+      // 4. Si el usuario no existe, crearlo en la base de datos
+      const [newUser] = await connection.execute(
+        "INSERT INTO usuarios (email_usuario, nombre_usuario, foto_perfil, auth_provider) VALUES (?, ?, ?, 'google')",
+        [email, name, picture]
+      );
 
-        connection = await conectarBDMySql();
+      const [createdUser] = await connection.execute(
+        "SELECT * FROM usuarios WHERE id_usuario = ?",
+        [newUser.insertId]
+      );
 
-        // 2. Buscar si el usuario ya existe en la base de datos
-        const [existingUser] = await connection.execute(
-            "SELECT * FROM usuarios WHERE email_usuario = ?",
-            [email]
-        );
-
-        if (existingUser.length > 0) {
-            // 3. Si el usuario existe, iniciar sesión y devolver sus datos
-            console.log("Usuario encontrado:", existingUser[0]);
-            // Aquí podrías generar un JWT para la sesión
-            res.json({ result: existingUser[0], message: "Inicio de sesión exitoso." });
-        } else {
-            // 4. Si el usuario no existe, crearlo en la base de datos
-            const [newUser] = await connection.execute(
-                "INSERT INTO usuarios (email_usuario, nombre_usuario, foto_perfil, auth_provider) VALUES (?, ?, ?, 'google')",
-                [email, name, picture]
-            );
-
-            const [createdUser] = await connection.execute(
-                "SELECT * FROM usuarios WHERE id_usuario = ?",
-                [newUser.insertId]
-            );
-
-            console.log("Nuevo usuario creado:", createdUser[0]);
-             // Aquí también podrías generar un JWT
-            res.status(201).json({ result: createdUser[0], message: "Usuario registrado y sesión iniciada." });
-        }
-
-    } catch (error) {
-        console.error("Error en la autenticación con Google:", error);
-        return res.status(500).json({ message: "Error en la autenticación con Google." });
-    } finally {
-        if (connection) {
-            await connection.end();
-        }
+      console.log("Nuevo usuario creado:", createdUser[0]);
+      // Aquí también podrías generar un JWT
+      res.status(201).json({
+        result: createdUser[0],
+        message: "Usuario registrado y sesión iniciada.",
+      });
     }
+  } catch (error) {
+    console.error("Error en la autenticación con Google:", error);
+    return res
+      .status(500)
+      .json({ message: "Error en la autenticación con Google." });
+  } finally {
+    if (connection) {
+      await connection.end();
+    }
+  }
 };
 
 const crearUsuario = async (req, res) => {
@@ -213,7 +226,7 @@ const actualizarUsuario = async (req, res) => {
 const eliminarUsuario = async (req, res) => {
   let connection;
 
-  try { 
+  try {
     const { id } = req.params;
     connection = await conectarBDMySql();
 
