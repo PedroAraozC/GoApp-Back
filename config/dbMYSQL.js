@@ -8,7 +8,9 @@ const conectarBDMySql = async () => {
       user: process.env.USER_TAXI,
       password: process.env.PASSWORD_TAXI,
       database: process.env.DB_TAXI,
+      dateStrings: true,
     });
+    console.log("Conexión a la base de datos MySQL establecida");
     return connection;
   } catch (error) {
     console.log(error.message);

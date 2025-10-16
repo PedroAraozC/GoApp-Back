@@ -1,9 +1,22 @@
 const { Router } = require("express");
-const { login } = require("../controllers/userControllers");
+const {
+  obtenerUsuarios,
+  obtenerUsuarioId,
+  crearUsuario,
+  actualizarUsuario,
+  eliminarUsuario,
+  login,
+  google_login,
+} = require("../controllers/userControllers");
 
 const router = Router();
 
-// Ruta para el login de usuario
+router.get("/obtenerUsuarios", obtenerUsuarios);
+router.get("/obtenerUsuarioId/:id", obtenerUsuarioId);
+router.post("/crearUsuario", crearUsuario);
+router.put("/actualizarUsuario/:id", actualizarUsuario);
+router.put("/eliminarUsuario/:id", eliminarUsuario);
 router.post("/login", login);
+router.post("/google_login", google_login);
 
 module.exports = router;

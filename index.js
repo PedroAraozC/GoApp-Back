@@ -4,6 +4,8 @@ const moment = require("moment-timezone");
 const cors = require("cors");
 const conductorRoutes = require("./routes/conductorRoutes");
 const usuarioRoutes = require("./routes/usuarioRoutes");
+const generoRoutes = require("./routes/generoRoutes");
+const rolesRoutes = require("./routes/rolesRoutes")
 dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,8 +18,9 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use("/conductores", conductorRoutes);
 app.use("/usuarios", usuarioRoutes);
+app.use("/roles", rolesRoutes);
+app.use("/generos", generoRoutes);
 
-// Iniciar servidor
 app.listen(PORT, () => {
   console.log(`Servidor escuchando en http://localhost:${PORT} :D`);
 });
