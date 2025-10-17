@@ -1,7 +1,7 @@
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const { conectarBDMySql } = require("../config/dbMYSQL.js");
-const { OAuth2Client } = require("google-auth-library");
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import   {conectarBDMySql}  from "../config/dbMYSQL.js";
+import   {OAuth2Client}  from "google-auth-library";
 
 const client = new OAuth2Client(
   "125703789007-thjq5cpij6blij34sv8g404pq6ubnhjv.apps.googleusercontent.com"
@@ -291,7 +291,8 @@ const eliminarUsuario = async (req, res) => {
     }
   }
 };
-module.exports = {
+
+export {
   obtenerUsuarios,
   obtenerUsuarioId,
   crearUsuario,

@@ -1,11 +1,11 @@
-const express = require("express");
-const dotenv = require("dotenv");
-const moment = require("moment-timezone");
-const cors = require("cors");
-const conductorRoutes = require("./routes/conductorRoutes");
-const usuarioRoutes = require("./routes/usuarioRoutes");
-const generoRoutes = require("./routes/generoRoutes");
-const rolesRoutes = require("./routes/rolesRoutes")
+import express from "express";
+import dotenv from "dotenv";
+import moment from "moment-timezone";
+import cors from "cors";
+import conductorRoutes from "./routes/conductorRoutes.js";
+import usuarioRoutes from "./routes/usuarioRoutes.js";
+import generoRoutes from "./routes/generoRoutes.js";
+import rolesRoutes from "./routes/rolesRoutes.js";
 dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
