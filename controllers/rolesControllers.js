@@ -1,4 +1,4 @@
-const { conectarBDMySql } = require("../config/dbMYSQL");
+import {conectarBDMySql}  from "../config/dbMYSQL.js";
 
 
 /* C R U D */
@@ -96,4 +96,4 @@ const eliminarRol = async (req, res) => {
   }
 };
 
-module.exports = { altaRol, obtenerRol, editaRol, eliminarRol };
+export { altaRol, obtenerRol, editaRol, eliminarRol };
