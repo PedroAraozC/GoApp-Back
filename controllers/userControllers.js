@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { conectarBDMySql }  from "../config/dbMYSQL.js";
+import { conectarBDMySql } from "../config/dbMYSQL.js";
 import { OAuth2Client } from "google-auth-library";
 import nodemailer from "nodemailer";
 
@@ -11,8 +11,8 @@ const client = new OAuth2Client(
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: 'adra.omar2@gmail.com',
-        pass: 'jhza ltmo rstu poep '
+        user: 'tucutaxiok@gmail.com',
+        pass: 'snzu bwcd gkyg orlo'
     }
 });
 
@@ -21,6 +21,7 @@ const codigosVerificacion = {};
 const verificarUsuario = async (req, res) => {
     let connection;
     const { dni, email } = req.body;
+
     try {
         connection = await conectarBDMySql();
 
@@ -38,12 +39,65 @@ const verificarUsuario = async (req, res) => {
         const codigo = Math.floor(10000 + Math.random() * 90000);
         codigosVerificacion[email] = codigo;
 
+        const htmlBody = `
+        <div
+            style="font-family: Arial, sans-serif; background-color:#f5f5f5; padding:20px;">
+            <table width="100%"
+                style="max-width:600px; margin:auto; background:white; border-radius:6px; overflow:hidden; box-shadow:0 0 10px rgba(0,0,0,0.1);">
+                <tr>
+                    <td
+                        style="background-color:#ddc701; color:white; text-align:center; padding:15px 0;">
+                        <h2 style="margin:0;">TUCU TAXI</h2>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:25px;">
+                        <p>Estimado/a <b>${rows[0].apellido_usuario}, ${rows[0].nombre_usuario}</b>,</p>
+                        <p>Le enviamos el siguiente código de seguridad para
+                            continuar con la recuperación de su usuario y clave:</p>
+                        <div style="text-align:center; margin:25px 0;">
+                            <div
+                                style="display:inline-block; background-color:#ddc701; color:white; font-size:24px; font-weight:bold; padding:15px 30px; border-radius:8px;">
+                                ${codigo}
+                            </div>
+                        </div>
+                        <p>Recuerde que la información enviada es personal y
+                            privada.</p>
+
+                        <hr
+                            style="border:none; border-top:1px solid #ddd; margin:30px 0;">
+
+                        <p style="font-size:12px; color:#555; line-height:1.5;">
+                            Este mensaje fue originado automáticamente. Por
+                            favor, no responda al mismo.<br><br>
+                            Tucu Taxi, a los efectos de resguardar su seguridad, no
+                            tiene prácticas de solicitar ningún tipo de
+                            información por e-mail.
+                            Si recibe un llamado o correo solicitando
+                            información personal, no lo responda ni ingrese
+                            datos personales ni claves.<br><br>
+                            Ante cualquier consulta, escríbanos a
+                            <a href="mailto:tucutaxiok@gmail.com"
+                                style="color:#003087;">delitosinformaticos-arg@tucutaxi.com</a>
+                            o contáctese al <b>0800-123-4567</b>.<br><br>
+                            El contenido de este mensaje es privado,
+                            confidencial y exclusivo para sus destinatarios.
+                            Tucu Taxi no se responsabiliza por
+                            los daños derivados del incumplimiento de lo aquí
+                            establecido.
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        `
+
         // Enviar email
         await transporter.sendMail({
-            from: 'adra.omar2@gmail.com',
+            from: 'Tucu Taxi <avisos@tucutaxi.com',
             to: email,
-            subject: 'Código de recuperación',
-            text: `Tu código de verificación es: ${codigo}`
+            subject: 'Aviso de CÓDIGO DE SEGURIDAD',
+            html: htmlBody,
         });
 
         res.json({ success: true, message: 'Código enviado al correo' });
