@@ -397,7 +397,7 @@ const actualizarUsuario = async (req, res) => {
 
     try {
         let { id } = req.params;
-        let { dni, fecha_nacimiento, id_genero, telefono_usuario, email } =
+        let { dni, fecha_nacimiento, id_genero, telefono_usuario, email_usuario } =
             req.body;
         connection = await conectarBDMySql();
         
