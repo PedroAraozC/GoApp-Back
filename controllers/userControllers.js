@@ -200,8 +200,11 @@ const login = async (req, res) => {
 
         const user = rows[0];
 
-        const validPassword = await bcrypt.compare(password, user.password);
+        /*const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword)
+            return res.status(401).json({ message: "Contraseña incorrecta." });
+        */
+       if (password != user.password)
             return res.status(401).json({ message: "Contraseña incorrecta." });
 
         const token = jwt.sign(
@@ -262,8 +265,8 @@ const google_login = async (req, res) => {
             user = existingUser[0];
         } else {
             const [result] = await connection.execute(
-                "INSERT INTO usuarios (nombre_usuario, email_usuario, google_id, foto_perfil) VALUES (?, ?, ?, ?)",
-                [name, email, google_id, picture]
+                "INSERT INTO usuarios (nombre_usuario, email_usuario, google_id, foto_perfil, auth_provider) VALUES (?, ?, ?, ?, ?)",
+                [name, email, google_id, picture, 'google']
             );
 
             const [newUser] = await connection.execute(
@@ -303,66 +306,57 @@ const google_login = async (req, res) => {
 const crearUsuario = async (req, res) => {
     let connection;
 
-    try {
-        let {
-            nombre_usuario,
-            apellido_usuario,
-            dni,
-            fecha_nacimiento,
-            id_genero,
-            password,
-            telefono_usuario,
-            email_usuario,
-            id_rol,
-        } = req.body;
+    let {
+        apellido,
+        nombre,
+        password,
+        email
+    } = req.body;
 
+    console.log(req.body, "req body");
+
+    try {
         connection = await conectarBDMySql();
 
         const [existe] = await connection.execute(
             "SELECT * FROM usuarios WHERE email_usuario = ?",
-            [email_usuario]
+            [email]
         );
         if (existe.length > 0)
             return res.status(400).json({ message: "El email ya está registrado." });
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        //const hashedPassword = await bcrypt.hash(password, 10);
 
         const [result] = await connection.execute(
-            "INSERT INTO usuarios (nombre_usuario, apellido_usuario, dni, fecha_nacimiento, id_genero, password, telefono_usuario, email_usuario, id_rol) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO usuarios (nombre_usuario, apellido_usuario, password, email_usuario, id_rol, auth_provider) VALUES (?, ?, ?, ?, ?, ?)",
             [
-                nombre_usuario,
-                apellido_usuario,
-                dni,
-                fecha_nacimiento,
-                id_genero,
+                nombre,
+                apellido,
                 password,
-                telefono_usuario,
-                email_usuario,
-                id_rol,
+                email,
+                1,
+                'manual'
             ]
         );
 
         console.log(
-            nombre_usuario,
-            apellido_usuario,
-            dni,
-            fecha_nacimiento,
-            id_genero,
+            nombre,
+            apellido,
             password,
-            telefono_usuario,
-            email_usuario,
-            id_rol
+            email,
+            1,
+            'manual'
         );
 
         const userId = result.insertId;
 
         const token = jwt.sign(
-            { id_usuario: userId, email: email_usuario },
+            { id_usuario: userId, email: email },
             process.env.JWT_SECRET,
             { expiresIn: "7d" }
         );
 
-        res.json({
+        res.status(200).json({
             message: "Usuario creado exitosamente",
             status: "OK",
             userId,
@@ -380,19 +374,18 @@ const crearUsuario = async (req, res) => {
 
 const actualizarUsuario = async (req, res) => {
     let connection;
+    let { id } = req.params;
+    let { dni, fecha_nacimiento, id_genero, telefono_usuario, email_usuario } = req.body;
 
     try {
-        let { id } = req.params;
-        let { dni, fecha_nacimiento, id_genero, telefono_usuario, email } =
-            req.body;
         connection = await conectarBDMySql();
-        console.log(req.params, "req params");
-        console.log(req.body, "req body");
+        //console.log(req.params, "req params");
+        //console.log(req.body, "req body");
         const result = await connection.execute(
             "UPDATE usuarios SET  dni = ?, fecha_nacimiento = ?, id_genero = ?,telefono_usuario = ?, email_usuario = ? WHERE id_usuario = ?",
-            [dni, fecha_nacimiento, id_genero, telefono_usuario, email, id]
+            [dni, fecha_nacimiento, id_genero, telefono_usuario, email_usuario, id]
         );
-
+        console.log(result);
         res.json({ message: "Usuario actualizado exitosamente", status: "OK" });
     } catch (error) {
         return res.status(500).json({
