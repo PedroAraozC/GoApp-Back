@@ -247,7 +247,7 @@ const google_login = async (req, res) => {
         });
 
         const payload = ticket.getPayload();
-        const { sub: google_id, email, name, picture } = payload;
+        const { sub: google_id, email, given_name, family_name, picture } = payload;
 
         if (!email) {
             return res
@@ -268,8 +268,8 @@ const google_login = async (req, res) => {
             user = existingUser[0];
         } else {
             const [result] = await connection.execute(
-                "INSERT INTO usuarios (nombre_usuario, email_usuario, google_id, foto_perfil, auth_provider) VALUES (?, ?, ?, ?, ?)",
-                [name, email, google_id, picture, 'google']
+                "INSERT INTO usuarios (nombre_usuario, apellido_usuario, email_usuario, google_id, foto_perfil, auth_provider) VALUES (?, ?, ?, ?, ?, ?)",
+                [given_name, family_name, email, google_id, picture, 'google']
             );
 
             const [newUser] = await connection.execute(
