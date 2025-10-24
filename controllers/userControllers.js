@@ -386,14 +386,18 @@ const actualizarUsuario = async (req, res) => {
         let { dni, fecha_nacimiento, id_genero, telefono_usuario, email } =
             req.body;
         connection = await conectarBDMySql();
-        console.log(req.params, "req params");
-        console.log(req.body, "req body");
+        
+        console.log(req.params);
+
+        console.log(req.body);
+
         const result = await connection.execute(
             "UPDATE usuarios SET  dni = ?, fecha_nacimiento = ?, id_genero = ?,telefono_usuario = ?, email_usuario = ? WHERE id_usuario = ?",
             [dni, fecha_nacimiento, id_genero, telefono_usuario, email, id]
         );
-
+        console.log(result);
         res.json({ message: "Usuario actualizado exitosamente", status: "OK" });
+        
     } catch (error) {
         return res.status(500).json({
             message: "Error al actualizar usuario. Error: " + error.message,
