@@ -29,7 +29,6 @@ const verificarUsuario = async (req, res) => {
       "SELECT * FROM usuarios WHERE dni = ? AND email_usuario = ?",
       [dni, email]
     );
-    console.log(rows);
 
     if (rows.length === 0) {
       return res
@@ -185,31 +184,54 @@ const obtenerUsuarios = async (req, res) => {
 
 const obtenerUsuarioId = async (req, res) => {
   let connection;
-  let { id } = req.params;
+  const { id } = req.params;
+
   try {
-    console.log(id);
     connection = await conectarBDMySql();
-    const result = await connection.execute(
+
+    // Ejecutar la consulta
+    const [rows] = await connection.execute(
       "SELECT * FROM usuarios WHERE id_usuario = ?",
       [id]
     );
-    console.log(result[0], "aaaaaa");
-    res.json({ result: result[0] });
-  } catch (error) {
-    return res
-      .status(500)
-      .json({ message: "Error al obtener datos del usuario" });
-  } finally {
-    if (connection) {
-      await connection.end();
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
     }
+
+    const usuario = rows[0];
+
+    // Formatear fecha_nacimiento: si existe, mantener YYYY-MM-DD; si es '0000-00-00' o null, poner null
+    if (
+      !usuario.fecha_nacimiento ||
+      usuario.fecha_nacimiento === "0000-00-00"
+    ) {
+      usuario.fecha_nacimiento = null;
+    } else {
+      // Opcional: asegurarse que venga en formato 'YYYY-MM-DD'
+      usuario.fecha_nacimiento = usuario.fecha_nacimiento
+        .toString()
+        .split("T")[0];
+    }
+
+    // Enviar usuario al frontend
+    res.json({ result: usuario });
+  } catch (error) {
+    console.error("❌ Error en obtenerUsuarioId:", error);
+    res
+      .status(500)
+      .json({
+        message: "Error al obtener datos del usuario: " + error.message,
+      });
+  } finally {
+    if (connection) await connection.end();
   }
 };
 
 const login = async (req, res) => {
   let connection;
   let { email, password } = req.body;
-  console.log(req.body);
+
   try {
     connection = await conectarBDMySql();
 
@@ -217,14 +239,17 @@ const login = async (req, res) => {
       "SELECT * FROM usuarios WHERE email_usuario = ?",
       [email]
     );
-    console.log(rows);
+
     if (rows.length === 0)
       return res.status(404).json({ message: "Usuario no encontrado." });
 
     const user = rows[0];
 
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword)
+    /*const validPassword = await bcrypt.compare(password, user.password);
+        if (!validPassword)
+            return res.status(401).json({ message: "Contraseña incorrecta." });
+        */
+    if (password != user.password)
       return res.status(401).json({ message: "Contraseña incorrecta." });
 
     const token = jwt.sign(
@@ -233,7 +258,6 @@ const login = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    console.log(user, "Login");
     res.json({
       result: user,
       token,
@@ -264,8 +288,8 @@ const google_login = async (req, res) => {
     });
 
     const payload = ticket.getPayload();
-    const { sub: google_id, email, name, picture } = payload;
-    console.log(payload);
+    const { sub: google_id, email, given_name, family_name, picture } = payload;
+
     if (!email) {
       return res
         .status(400)
@@ -273,7 +297,7 @@ const google_login = async (req, res) => {
     }
 
     connection = await conectarBDMySql();
-    console.log(email);
+
     const [existingUser] = await connection.execute(
       "SELECT * FROM usuarios WHERE email_usuario = ? OR google_id = ?",
       [email, google_id]
@@ -285,8 +309,8 @@ const google_login = async (req, res) => {
       user = existingUser[0];
     } else {
       const [result] = await connection.execute(
-        "INSERT INTO usuarios (nombre_usuario, email_usuario, google_id, foto_perfil) VALUES (?, ?, ?, ?)",
-        [name, email, google_id, picture]
+        "INSERT INTO usuarios (nombre_usuario, apellido_usuario, email_usuario, google_id, foto_perfil, auth_provider) VALUES (?, ?, ?, ?, ?, ?)",
+        [given_name, family_name, email, google_id, picture, "google"]
       );
 
       const [newUser] = await connection.execute(
@@ -326,73 +350,40 @@ const google_login = async (req, res) => {
 const crearUsuario = async (req, res) => {
   let connection;
 
-  try {
-    let {
-      nombre_usuario,
-      apellido_usuario,
-      dni,
-      fecha_nacimiento,
-      id_genero,
-      password,
-      telefono_usuario,
-      email_usuario,
-      id_rol,
-    } = req.body;
+  let { apellido, nombre, password, email } = req.body;
 
+  try {
     connection = await conectarBDMySql();
 
     const [existe] = await connection.execute(
       "SELECT * FROM usuarios WHERE email_usuario = ?",
-      [email_usuario]
+      [email]
     );
     if (existe.length > 0)
       return res.status(400).json({ message: "El email ya está registrado." });
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    //const hashedPassword = await bcrypt.hash(password, 10);
 
     const [result] = await connection.execute(
-      "INSERT INTO usuarios (nombre_usuario, apellido_usuario, dni, fecha_nacimiento, id_genero, password, telefono_usuario, email_usuario, id_rol) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [
-        nombre_usuario,
-        apellido_usuario,
-        dni,
-        fecha_nacimiento,
-        id_genero,
-        password,
-        telefono_usuario,
-        email_usuario,
-        id_rol,
-      ]
-    );
-
-    console.log(
-      nombre_usuario,
-      apellido_usuario,
-      dni,
-      fecha_nacimiento,
-      id_genero,
-      password,
-      telefono_usuario,
-      email_usuario,
-      id_rol
+      "INSERT INTO usuarios (nombre_usuario, apellido_usuario, password, email_usuario, id_rol, auth_provider) VALUES (?, ?, ?, ?, ?, ?)",
+      [nombre, apellido, password, email, 1, "manual"]
     );
 
     const userId = result.insertId;
 
     const token = jwt.sign(
-      { id_usuario: userId, email: email_usuario },
+      { id_usuario: userId, email: email },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    res.json({
+    res.status(200).json({
       message: "Usuario creado exitosamente",
       status: "OK",
       userId,
       token,
     });
   } catch (error) {
-    console.log(error.message);
     return res.status(500).json({ message: error.message });
   } finally {
     if (connection) {
@@ -403,28 +394,59 @@ const crearUsuario = async (req, res) => {
 
 const actualizarUsuario = async (req, res) => {
   let connection;
+  let { id } = req.params;
+  let {
+    dni,
+    fecha_nacimiento,
+    id_genero,
+    telefono_usuario,
+    email,
+    email_usuario,
+  } = req.body;
 
   try {
-    let { id } = req.params;
-    let { dni, fecha_nacimiento, id_genero, telefono_usuario, email } =
-      req.body;
     connection = await conectarBDMySql();
-    console.log(req.params, "req params");
-    console.log(req.body, "req body");
-    const result = await connection.execute(
-      "UPDATE usuarios SET  dni = ?, fecha_nacimiento = ?, id_genero = ?,telefono_usuario = ?, email_usuario = ? WHERE id_usuario = ?",
-      [dni, fecha_nacimiento, id_genero, telefono_usuario, email, id]
+
+    console.log(req.body, "body :)");
+
+    const correo = email || email_usuario;
+
+    if (fecha_nacimiento) {
+      if (fecha_nacimiento.includes("/")) {
+        const [dia, mes, anio] = fecha_nacimiento.split("/");
+        fecha_nacimiento = `${anio}-${mes.padStart(2, "0")}-${dia.padStart(
+          2,
+          "0"
+        )}`;
+      }
+
+      // Si viene como "yyyy-mm-dd hh:mm:ss" → cortamos solo la fecha
+      else if (
+        fecha_nacimiento.includes("T") ||
+        fecha_nacimiento.includes(" ")
+      ) {
+        fecha_nacimiento = fecha_nacimiento.split(/[T ]/)[0];
+      }
+    } else {
+      fecha_nacimiento = null;
+    }
+    console.log(req.body, "body222 :)");
+
+    const [result] = await connection.execute(
+      `UPDATE usuarios 
+       SET dni = ?, fecha_nacimiento = ?, id_genero = ?, telefono_usuario = ?, email_usuario = ?
+       WHERE id_usuario = ?`,
+      [dni, fecha_nacimiento, id_genero, telefono_usuario, correo, id]
     );
 
     res.json({ message: "Usuario actualizado exitosamente", status: "OK" });
   } catch (error) {
+    console.error("❌ Error al actualizar usuario:", error);
     return res.status(500).json({
-      message: "Error al actualizar usuario. Error: " + error.message,
+      message: "Error al actualizar usuario: " + error.message,
     });
   } finally {
-    if (connection) {
-      await connection.end();
-    }
+    if (connection) await connection.end();
   }
 };
 
