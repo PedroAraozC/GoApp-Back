@@ -161,31 +161,42 @@ const obtenerUsuarios = async (req, res) => {
 
 const obtenerUsuarioId = async (req, res) => {
     let connection;
-    let { id } = req.params;
+    const { id } = req.params;
+
     try {
         connection = await conectarBDMySql();
-        const result = await connection.execute(
+
+        // Ejecutar la consulta
+        const [rows] = await connection.execute(
             "SELECT * FROM usuarios WHERE id_usuario = ?",
             [id]
         );
 
-        if (result.fecha_nacimiento && usuario.fecha_nacimiento !== '0000-00-00') {
-            usuario.fecha_nacimiento = usuario.fecha_nacimiento.toISOString().split('T')[0];
-        } else {
-            usuario.fecha_nacimiento = null;
+        if (rows.length === 0) {
+            return res.status(404).json({ message: "Usuario no encontrado" });
         }
 
-        res.json({ result: result[0] });
-    } catch (error) {
-        return res
-            .status(500)
-            .json({ message: "Error al obtener datos del usuario" });
-    } finally {
-        if (connection) {
-            await connection.end();
+        const usuario = rows[0];
+
+        // Formatear fecha_nacimiento: si existe, mantener YYYY-MM-DD; si es '0000-00-00' o null, poner null
+        if (!usuario.fecha_nacimiento || usuario.fecha_nacimiento === '0000-00-00') {
+            usuario.fecha_nacimiento = null;
+        } else {
+            // Opcional: asegurarse que venga en formato 'YYYY-MM-DD'
+            usuario.fecha_nacimiento = usuario.fecha_nacimiento.toString().split('T')[0];
         }
+
+        // Enviar usuario al frontend
+        res.json({ result: usuario });
+    } catch (error) {
+        console.error("❌ Error en obtenerUsuarioId:", error);
+        res.status(500).json({ message: "Error al obtener datos del usuario: " + error.message });
+    } finally {
+        if (connection) await connection.end();
     }
 };
+
+
 
 const login = async (req, res) => {
     let connection;
