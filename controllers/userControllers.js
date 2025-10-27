@@ -393,34 +393,61 @@ const crearUsuario = async (req, res) => {
 };
 
 const actualizarUsuario = async (req, res) => {
-    let connection;
+  let connection;
+  let { id } = req.params;
+  let {
+    dni,
+    fecha_nacimiento,
+    id_genero,
+    telefono_usuario,
+    email,
+    email_usuario,
+  } = req.body;
 
-    try {
-        let { id } = req.params;
-        let { dni, fecha_nacimiento, id_genero, telefono_usuario, email_usuario } =
-            req.body;
-        connection = await conectarBDMySql();
-        
-        console.log(req.params);
+  try {
+    connection = await conectarBDMySql();
 
-        console.log(req.body);
+    console.log(req.body, "body :)");
 
-        const result = await connection.execute(
-            "UPDATE usuarios SET  dni = ?, fecha_nacimiento = ?, id_genero = ?,telefono_usuario = ?, email_usuario = ? WHERE id_usuario = ?",
-            [dni, fecha_nacimiento, id_genero, telefono_usuario, email, id]
-        );
-        console.log(result);
-        res.json({ message: "Usuario actualizado exitosamente", status: "OK" });
-        
-    } catch (error) {
-        return res.status(500).json({
-            message: "Error al actualizar usuario. Error: " + error.message,
-        });
-    } finally {
-        if (connection) {
-            await connection.end();
-        }
+    const correo = email || email_usuario;
+
+    if (fecha_nacimiento) {
+      if (fecha_nacimiento.includes("/")) {
+        const [dia, mes, anio] = fecha_nacimiento.split("/");
+        fecha_nacimiento = `${anio}-${mes.padStart(2, "0")}-${dia.padStart(
+          2,
+          "0"
+        )}`;
+      }
+
+      // Si viene como "yyyy-mm-dd hh:mm:ss" → cortamos solo la fecha
+      else if (
+        fecha_nacimiento.includes("T") ||
+        fecha_nacimiento.includes(" ")
+      ) {
+        fecha_nacimiento = fecha_nacimiento.split(/[T ]/)[0];
+      }
+    } else {
+      fecha_nacimiento = null;
     }
+    console.log(req.body, "body222 :)");
+
+    const [result] = await connection.execute(
+      `UPDATE usuarios 
+       SET dni = ?, fecha_nacimiento = ?, id_genero = ?, telefono_usuario = ?, email_usuario = ?
+       WHERE id_usuario = ?`,
+      [dni, fecha_nacimiento, id_genero, telefono_usuario, correo, id]
+    );
+
+    res.json({ message: "Usuario actualizado exitosamente", status: "OK" });
+  } catch (error) {
+    console.error("❌ Error al actualizar usuario:", error);
+    return res.status(500).json({
+      message: "Error al actualizar usuario: " + error.message,
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
 };
 
 const eliminarUsuario = async (req, res) => {
