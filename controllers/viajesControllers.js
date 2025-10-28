@@ -19,8 +19,7 @@ export const iniciarViaje = async (req, res) => {
 
     if (!id_usuario || !origen_lat || !origen_lng) {
       return res.status(400).json({
-        message:
-          "Faltan datos obligatorios (id_usuario, origen_lat, origen_lng)",
+        message: "Faltan datos obligatorios (id_usuario, origen_lat, origen_lng)",
       });
     }
 
@@ -39,7 +38,7 @@ export const iniciarViaje = async (req, res) => {
         direccion_origen,
         direccion_destino,
         precio_estimado,
-        5,
+        5, // 5 = buscando
       ]
     );
 
@@ -49,19 +48,17 @@ export const iniciarViaje = async (req, res) => {
       [id_viaje]
     );
 
-    // 🔹 Emitir evento de nuevo viaje
+    const viaje = rows[0];
     const io = req.app.get("io");
-    io.emit("viaje_nuevo", rows[0]);
+    io.emit("viaje_nuevo", viaje); // 🔊 Emitimos evento global
 
     res.status(201).json({
-      result: rows[0],
+      result: viaje,
       message: "Viaje iniciado correctamente en estado 'buscando'.",
     });
   } catch (error) {
     console.error("❌ iniciarViaje:", error);
-    res
-      .status(500)
-      .json({ message: "Error al iniciar viaje: " + error.message });
+    res.status(500).json({ message: "Error al iniciar viaje: " + error.message });
   } finally {
     if (connection) await connection.end();
   }
@@ -84,9 +81,7 @@ export const obtenerViaje = async (req, res) => {
     res.json({ result: rows[0] });
   } catch (error) {
     console.error("❌ obtenerViaje:", error);
-    res
-      .status(500)
-      .json({ message: "Error al obtener viaje: " + error.message });
+    res.status(500).json({ message: "Error al obtener viaje: " + error.message });
   } finally {
     if (connection) await connection.end();
   }
@@ -110,9 +105,7 @@ export const obtenerViajesUsuario = async (req, res) => {
     res.json({ result: rows });
   } catch (error) {
     console.error("❌ obtenerViajesUsuario:", error);
-    res
-      .status(500)
-      .json({ message: "Error al listar viajes: " + error.message });
+    res.status(500).json({ message: "Error al listar viajes: " + error.message });
   } finally {
     if (connection) await connection.end();
   }
@@ -132,13 +125,6 @@ export const asignarConductor = async (req, res) => {
 
     connection = await conectarBDMySql();
 
-    const [exists] = await connection.execute(
-      "SELECT estado FROM viajes WHERE id_viajes = ?",
-      [id]
-    );
-    if (exists.length === 0)
-      return res.status(404).json({ message: "Viaje no encontrado" });
-
     await connection.execute(
       "UPDATE viajes SET id_conductor = ?, estado = 1 WHERE id_viajes = ?",
       [id_conductor, id]
@@ -149,16 +135,16 @@ export const asignarConductor = async (req, res) => {
       [id]
     );
 
-    // 🔹 Emitir evento
+    const viaje = rows[0];
     const io = req.app.get("io");
-    io.emit("viaje_asignado", rows[0]);
 
-    res.json({ result: rows[0], message: "Conductor asignado correctamente" });
+    io.emit("viaje_asignado", viaje); // 🔊 Evento para todos
+    io.to(`viaje_${id}`).emit("viaje_actualizado", viaje); // 👥 Para quienes estén escuchando este viaje
+
+    res.json({ result: viaje, message: "Conductor asignado correctamente" });
   } catch (error) {
     console.error("❌ asignarConductor:", error);
-    res
-      .status(500)
-      .json({ message: "Error al asignar conductor: " + error.message });
+    res.status(500).json({ message: "Error al asignar conductor: " + error.message });
   } finally {
     if (connection) await connection.end();
   }
@@ -173,13 +159,6 @@ export const comenzarViaje = async (req, res) => {
     const { id } = req.params;
     connection = await conectarBDMySql();
 
-    const [exists] = await connection.execute(
-      "SELECT estado FROM viajes WHERE id_viajes = ?",
-      [id]
-    );
-    if (exists.length === 0)
-      return res.status(404).json({ message: "Viaje no encontrado" });
-
     await connection.execute(
       "UPDATE viajes SET estado = 2, fecha_inicio = NOW() WHERE id_viajes = ?",
       [id]
@@ -190,15 +169,15 @@ export const comenzarViaje = async (req, res) => {
       [id]
     );
 
+    const viaje = rows[0];
     const io = req.app.get("io");
-    io.emit("viaje_en_curso", rows[0]);
+    io.emit("viaje_en_curso", viaje);
+    io.to(`viaje_${id}`).emit("viaje_actualizado", viaje);
 
-    res.json({ result: rows[0], message: "Viaje en curso" });
+    res.json({ result: viaje, message: "Viaje en curso" });
   } catch (error) {
     console.error("❌ comenzarViaje:", error);
-    res
-      .status(500)
-      .json({ message: "Error al comenzar viaje: " + error.message });
+    res.status(500).json({ message: "Error al comenzar viaje: " + error.message });
   } finally {
     if (connection) await connection.end();
   }
@@ -211,11 +190,7 @@ export const finalizarViaje = async (req, res) => {
   let connection;
   try {
     const { id } = req.params;
-    const {
-      precio_final = null,
-      distancia_km = null,
-      duracion_min = null,
-    } = req.body;
+    const { precio_final = null, distancia_km = null, duracion_min = null } = req.body;
 
     connection = await conectarBDMySql();
 
@@ -234,15 +209,15 @@ export const finalizarViaje = async (req, res) => {
       [id]
     );
 
+    const viaje = rows[0];
     const io = req.app.get("io");
-    io.emit("viaje_finalizado", rows[0]);
+    io.emit("viaje_finalizado", viaje);
+    io.to(`viaje_${id}`).emit("viaje_actualizado", viaje);
 
-    res.json({ result: rows[0], message: "Viaje finalizado correctamente" });
+    res.json({ result: viaje, message: "Viaje finalizado correctamente" });
   } catch (error) {
     console.error("❌ finalizarViaje:", error);
-    res
-      .status(500)
-      .json({ message: "Error al finalizar viaje: " + error.message });
+    res.status(500).json({ message: "Error al finalizar viaje: " + error.message });
   } finally {
     if (connection) await connection.end();
   }
@@ -257,25 +232,19 @@ export const cancelarViaje = async (req, res) => {
     const { id } = req.params;
     connection = await conectarBDMySql();
 
-    await connection.execute(
-      "UPDATE viajes SET estado = 3 WHERE id_viajes = ?",
-      [id]
-    );
+    await connection.execute("UPDATE viajes SET estado = 3 WHERE id_viajes = ?", [id]);
 
-    const [rows] = await connection.execute(
-      "SELECT * FROM viajes WHERE id_viajes = ?",
-      [id]
-    );
+    const [rows] = await connection.execute("SELECT * FROM viajes WHERE id_viajes = ?", [id]);
 
+    const viaje = rows[0];
     const io = req.app.get("io");
-    io.emit("viaje_cancelado", rows[0]);
+    io.emit("viaje_cancelado", viaje);
+    io.to(`viaje_${id}`).emit("viaje_actualizado", viaje);
 
-    res.json({ result: rows[0], message: "Viaje cancelado correctamente" });
+    res.json({ result: viaje, message: "Viaje cancelado correctamente" });
   } catch (error) {
     console.error("❌ cancelarViaje:", error);
-    res
-      .status(500)
-      .json({ message: "Error al cancelar viaje: " + error.message });
+    res.status(500).json({ message: "Error al cancelar viaje: " + error.message });
   } finally {
     if (connection) await connection.end();
   }
