@@ -5,82 +5,51 @@ import cors from "cors";
 import http from "http";
 import { Server } from "socket.io";
 
-// 🧩 Rutas
-import conductorRoutes from "./routes/conductorRoutes.js";
+// Rutas
 import usuarioRoutes from "./routes/usuarioRoutes.js";
-import generoRoutes from "./routes/generoRoutes.js";
-import rolesRoutes from "./routes/rolesRoutes.js";
 import viajesRoutes from "./routes/ViajesRoutes.js";
+import rolesRoutes from "./routes/rolesRoutes.js";
+import generoRoutes from "./routes/generoRoutes.js";
 
 dotenv.config();
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// =============================
-// 🔧 Inicializar Socket.IO
-// =============================
 const server = http.createServer(app);
+
+// 🔥 Configuración de Socket.IO
 const io = new Server(server, {
   cors: {
-    origin: "*", // 🔐 más adelante restringilo a tu frontend
-    methods: ["GET", "POST", "PUT"],
+    origin: "*", // ⚠️ Ajustá según tu frontend (ej. "http://localhost:5173" o tu dominio)
+    methods: ["GET", "POST", "PUT", "DELETE"],
   },
 });
 
-// Guardamos el io en app para usarlo dentro de controladores
-app.set("io", io);
+app.set("io", io); // ✅ Hace que los controladores puedan usar Socket.IO
 
-// =============================
-// 🌐 Eventos de Socket.IO
-// =============================
-io.on("connection", (socket) => {
-  console.log("🟢 Nuevo cliente conectado:", socket.id);
-
-  // 📍 Registro de usuario (pasajero o conductor)
-  socket.on("registrar_usuario", ({ idUsuario, tipo }) => {
-    console.log(`👤 Usuario conectado: ${idUsuario} (${tipo})`);
-    socket.join(`usuario_${idUsuario}`);
-  });
-
-  // 🚕 Escuchar cuando se crea un viaje
-  socket.on("viaje_creado", (data) => {
-    console.log("🆕 Viaje creado:", data);
-    io.emit("viaje_actualizado", data); // 🔁 notifica a todos los clientes conectados
-  });
-
-  // 🚗 Escuchar actualizaciones de viaje (ej: cambio de estado)
-  socket.on("viaje_actualizado", (data) => {
-    console.log("🔄 Viaje actualizado:", data);
-    io.emit("viaje_actualizado", data);
-  });
-
-  // ❌ Cuando el cliente se desconecta
-  socket.on("disconnect", () => {
-    console.log("🔴 Cliente desconectado:", socket.id);
-  });
-});
-
-// =============================
-// 🕒 Configuración general
-// =============================
-moment.tz.setDefault("America/Argentina/Buenos_Aires");
-
+// Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// =============================
-// 🧭 Rutas
-// =============================
-app.use("/conductores", conductorRoutes);
+// 🔹 Rutas
 app.use("/usuarios", usuarioRoutes);
+app.use("/viajes", viajesRoutes);
 app.use("/roles", rolesRoutes);
 app.use("/generos", generoRoutes);
-app.use("/viajes", viajesRoutes);
 
-// =============================
-// 🚀 Inicio del servidor
-// =============================
+// 🔥 Eventos globales de conexión
+io.on("connection", (socket) => {
+  socket.on("usuario_conectado", (data) => {
+    console.log("🟢 Usuario conectado:", data);
+    io.emit("usuario_estado", { ...data, conectado: true });
+  });
+
+  socket.on("disconnect", () => {
+    console.log("🔴 Usuario desconectado");
+  });
+});
+
+// Iniciar servidor
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`🚀 Servidor + Socket corriendo en puerto ${PORT}`);
+  console.log(`🚀 Servidor escuchando en http://localhost:${PORT}`);
 });

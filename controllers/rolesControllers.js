@@ -1,14 +1,42 @@
 import { conectarBDMySql } from "../config/dbMYSQL.js";
 
+const emitir = (req, evento, data) => {
+  const io = req.app.get("io");
+  if (io) io.emit(evento, data);
+};
 /* ================================
    🔹 CREATE - POST /roles/altaRol
    ================================ */
+const crearRol = async (req, res) => {
+  let connection;
+  try {
+    const { nombre_rol } = req.body;
+    connection = await conectarBDMySql();
+    const [result] = await connection.execute(
+      "INSERT INTO roles (nombre_rol) VALUES (?)",
+      [nombre_rol]
+    );
+    const [rows] = await connection.execute(
+      "SELECT * FROM roles WHERE id_rol = ?",
+      [result.insertId]
+    );
+
+    emitir(req, "rol_creado", rows[0]);
+    res.status(201).json({ message: "Rol creado", result: rows[0] });
+  } catch (error) {
+    res.status(500).json({ message: "Error al crear rol: " + error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
 const altaRol = async (req, res) => {
   let connection;
   try {
     const { nombre_rol, habilita } = req.body;
     if (!nombre_rol) {
-      return res.status(400).json({ message: "El nombre del rol es obligatorio." });
+      return res
+        .status(400)
+        .json({ message: "El nombre del rol es obligatorio." });
     }
 
     connection = await conectarBDMySql();
@@ -101,10 +129,9 @@ const eliminarRol = async (req, res) => {
     }
 
     connection = await conectarBDMySql();
-    await connection.execute(
-      "UPDATE roles SET habilita = 0 WHERE id_rol = ?",
-      [id_rol]
-    );
+    await connection.execute("UPDATE roles SET habilita = 0 WHERE id_rol = ?", [
+      id_rol,
+    ]);
 
     // 🔊 Emitir evento Socket.IO
     const io = req.app.get("io");
@@ -126,4 +153,4 @@ const eliminarRol = async (req, res) => {
   }
 };
 
-export { altaRol, obtenerRol, editaRol, eliminarRol };
+export { altaRol, obtenerRol, editaRol, eliminarRol, crearRol };

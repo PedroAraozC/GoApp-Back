@@ -2,7 +2,6 @@ import mysql from "mysql2/promise";
 
 const conectarBDMySql = async () => {
   try {
-    console.log("mave")
     const connection = await mysql.createConnection({
       host: process.env.HOST_TAXI,
       port: process.env.PORT_TAXI,
