@@ -6,7 +6,7 @@ import {
   asignarConductor,
   comenzarViaje,
   finalizarViaje,
-  cancelarViaje,
+  // cancelarViaje,
 } from "../controllers/viajesControllers.js";
 
 const router = Router();
@@ -18,6 +18,6 @@ router.post("/iniciar", iniciarViaje);                     // crea el viaje en "
 router.put("/:id/asignar", asignarConductor);              // asigna conductor
 router.put("/:id/comenzar", comenzarViaje);                // pasa a "en_curso"
 router.put("/:id/finalizar", finalizarViaje);              // pasa a "finalizado"
-router.put("/:id/cancelar", cancelarViaje);                // pasa a "cancelado"
+// router.put("/:id/cancelar", cancelarViaje);                // pasa a "cancelado"
 
 export default router;

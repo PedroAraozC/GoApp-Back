@@ -10,6 +10,7 @@ import usuarioRoutes from "./routes/usuarioRoutes.js";
 import viajesRoutes from "./routes/ViajesRoutes.js";
 import rolesRoutes from "./routes/rolesRoutes.js";
 import generoRoutes from "./routes/generoRoutes.js";
+import {cancelarViajeSocket}  from "./controllers/viajesControllers.js";
 
 dotenv.config();
 const app = express();
@@ -45,6 +46,11 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     console.log("🔴 Usuario desconectado");
+  });
+
+  socket.on("viaje_cancelado", async (data) => {
+    console.log("📨 Recibido evento 'viaje_cancelado' desde cliente:", data);
+    await cancelarViajeSocket(io, data);
   });
 });
 
