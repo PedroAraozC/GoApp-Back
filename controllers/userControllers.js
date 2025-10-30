@@ -400,14 +400,14 @@ const actualizarUsuario = async (req, res) => {
 
   try {
     connection = await conectarBDMySql();
-    const email_usuario = email || email_usuario;
+    const correo = email || email_usuario;
     // if (fecha_nacimiento) {
     //   const partes = fecha_nacimiento.split("/");
     //   fecha_nacimiento = `${partes[2]}-${partes[1]}-${partes[0]}`;
     // }
     await connection.execute(
       `UPDATE usuarios SET dni=?, fecha_nacimiento=?, id_genero=?, telefono_usuario=?, email_usuario=? WHERE id_usuario=?`,
-      [dni, fecha_nacimiento, id_genero, telefono_usuario, email_usuario, id]
+      [dni, fecha_nacimiento, id_genero, telefono_usuario, correo, id]
     );
 
     const [rows] = await connection.execute(

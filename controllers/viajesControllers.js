@@ -206,7 +206,7 @@ export const cancelarViajeSocket = async (io, data) => {
       return;
     }
 
-    // 1️⃣ Actualizamos el estado en la DB
+    // 1️⃣ Actualizamos el estado en la DB  
     await connection.execute(
       "UPDATE viajes SET id_estado = 3 WHERE id_viajes = ?",
       [id_viaje]
