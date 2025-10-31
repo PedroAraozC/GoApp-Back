@@ -3,6 +3,9 @@ import jwt from "jsonwebtoken";
 import { conectarBDMySql } from "../config/dbMYSQL.js";
 import { OAuth2Client } from "google-auth-library";
 import nodemailer from "nodemailer";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const client = new OAuth2Client(process.env.SERVER_CLIENT_ID);
 
@@ -67,9 +70,9 @@ const verificarUsuario = async (req, res) => {
       subject: "Código de recuperación",
       html: htmlBody,
     });
-
     res.json({ success: true, message: "Código enviado al correo" });
   } catch (error) {
+    console.log(error)
     res.status(500).json({
       success: false,
       message: "Error en el servidor: " + error,
@@ -153,23 +156,35 @@ const obtenerUsuarioId = async (req, res) => {
   let connection;
   const { id } = req.params;
   try {
-    console.log("aaaaaaaaa")
+    console.log("aaaaaaaaa");
     connection = await conectarBDMySql();
     const [rows] = await connection.execute(
-      "SELECT * FROM usuarios WHERE id_usuario = ?",
+      `SELECT 
+      u.*, 
+      g.nombre_genero
+   FROM usuarios u
+   LEFT JOIN generos g ON u.id_genero = g.id_genero
+   WHERE u.id_usuario = ?`,
       [id]
     );
-
     if (rows.length === 0)
       return res.status(404).json({ message: "Usuario no encontrado" });
 
     const usuario = rows[0];
     if (!usuario.fecha_nacimiento || usuario.fecha_nacimiento === "0000-00-00")
       usuario.fecha_nacimiento = null;
-    else
-      usuario.fecha_nacimiento = usuario.fecha_nacimiento
-        .toString()
-        .split("T")[0];
+    else if (
+      !usuario.fecha_nacimiento ||
+      usuario.fecha_nacimiento === "0000-00-00"
+    ) {
+      usuario.fecha_nacimiento = null;
+    } else {
+      const fecha = new Date(usuario.fecha_nacimiento);
+      const dia = String(fecha.getDate()).padStart(2, "0");
+      const mes = String(fecha.getMonth() + 1).padStart(2, "0");
+      const anio = fecha.getFullYear();
+      usuario.fecha_nacimiento = `${dia}/${mes}/${anio}`;
+    }
 
     res.json({ result: usuario });
   } catch (error) {
@@ -402,10 +417,11 @@ const actualizarUsuario = async (req, res) => {
   try {
     connection = await conectarBDMySql();
     const correo = email || email_usuario;
-    // if (fecha_nacimiento) {
-    //   const partes = fecha_nacimiento.split("/");
-    //   fecha_nacimiento = `${partes[2]}-${partes[1]}-${partes[0]}`;
-    // }
+    if (fecha_nacimiento) {
+      const partes = fecha_nacimiento.split("/");
+      fecha_nacimiento = `${partes[2]}-${partes[1]}-${partes[0]}`;
+    }
+    console.log(req.body);
     await connection.execute(
       `UPDATE usuarios SET dni=?, fecha_nacimiento=?, id_genero=?, telefono_usuario=?, email_usuario=? WHERE id_usuario=?`,
       [dni, fecha_nacimiento, id_genero, telefono_usuario, correo, id]
