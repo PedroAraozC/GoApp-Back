@@ -153,6 +153,7 @@ const obtenerUsuarioId = async (req, res) => {
   let connection;
   const { id } = req.params;
   try {
+    console.log("aaaaaaaaa")
     connection = await conectarBDMySql();
     const [rows] = await connection.execute(
       "SELECT * FROM usuarios WHERE id_usuario = ?",
