@@ -10,7 +10,8 @@ import usuarioRoutes from "./routes/usuarioRoutes.js";
 import viajesRoutes from "./routes/ViajesRoutes.js";
 import rolesRoutes from "./routes/rolesRoutes.js";
 import generoRoutes from "./routes/generoRoutes.js";
-import {cancelarViajeSocket}  from "./controllers/viajesControllers.js";
+import pagosRoutes from "./routes/pagosRoutes.js";
+import { cancelarViajeSocket } from "./controllers/viajesControllers.js";
 
 dotenv.config();
 const app = express();
@@ -33,6 +34,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // 🔹 Rutas
 app.use("/usuarios", usuarioRoutes);
+app.use("/pagos", pagosRoutes);
 app.use("/viajes", viajesRoutes);
 app.use("/roles", rolesRoutes);
 app.use("/generos", generoRoutes);

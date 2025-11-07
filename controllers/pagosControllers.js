@@ -4,7 +4,9 @@ const obtener = async (req, res) => {
   let connection;
   try {
     connection = await conectarBDMySql();
-    const [rows] = await connection.execute("SELECT * FROM pagos WHERE habilita = 1 order by nombre_pago DESC");
+    const [rows] = await connection.execute(
+      "SELECT * FROM pagos WHERE habilita = 1 order by nombre_pago DESC"
+    );
     res.status(200).json(rows);
   } catch (error) {
     res
@@ -15,6 +17,4 @@ const obtener = async (req, res) => {
   }
 };
 
-module.exports = {
-  obtener,
-};
+export { obtener };
