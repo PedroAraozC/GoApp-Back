@@ -9,13 +9,15 @@ import {
   google_login,
   verificarUsuario,
   validarCodigo,
-  changePassword
+  changePassword,
+  editarRolUsuario
 } from "../controllers/userControllers.js";
 
 const router = Router();
 
 router.get("/obtenerUsuarios", obtenerUsuarios);
 router.get("/obtenerUsuarioId/:id", obtenerUsuarioId);
+router.put("/editarRolUsuario", editarRolUsuario);
 //router.post("/crearUsuario", crearUsuario);
 router.put("/actualizarUsuario/:id", actualizarUsuario);
 router.put("/eliminarUsuario/:id", eliminarUsuario);

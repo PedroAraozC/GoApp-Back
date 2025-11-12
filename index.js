@@ -11,6 +11,7 @@ import viajesRoutes from "./routes/ViajesRoutes.js";
 import rolesRoutes from "./routes/rolesRoutes.js";
 import generoRoutes from "./routes/generoRoutes.js";
 import pagosRoutes from "./routes/pagosRoutes.js";
+import conductorRoutes from "./routes/conductorRoutes.js";
 import { cancelarViajeSocket } from "./controllers/viajesControllers.js";
 
 dotenv.config();
@@ -37,6 +38,7 @@ app.use("/usuarios", usuarioRoutes);
 app.use("/pagos", pagosRoutes);
 app.use("/viajes", viajesRoutes);
 app.use("/roles", rolesRoutes);
+app.use("/conductores", conductorRoutes);
 app.use("/generos", generoRoutes);
 
 // 🔥 Eventos globales de conexión

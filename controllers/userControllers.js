@@ -72,7 +72,7 @@ const verificarUsuario = async (req, res) => {
     });
     res.json({ success: true, message: "Código enviado al correo" });
   } catch (error) {
-    console.log(error)
+    console.log(error);
     res.status(500).json({
       success: false,
       message: "Error en el servidor: " + error,
@@ -143,7 +143,16 @@ const obtenerUsuarios = async (req, res) => {
   let connection;
   try {
     connection = await conectarBDMySql();
-    const [result] = await connection.execute("SELECT * FROM usuarios");
+    const [result] = await connection.execute(`
+  SELECT 
+    u.*, 
+    r.nombre_rol, 
+    g.nombre_genero
+  FROM usuarios u
+  LEFT JOIN roles r ON u.id_rol = r.id_rol
+  LEFT JOIN generos g ON u.id_genero = g.id_genero
+`);
+
     res.json({ result });
   } catch (error) {
     res.status(500).json({ message: "Error al obtener usuarios: " + error });
@@ -443,6 +452,32 @@ const actualizarUsuario = async (req, res) => {
     if (connection) await connection.end();
   }
 };
+const editarRolUsuario = async (req, res) => {
+  let connection;
+  try {
+    const { id_usuario, id_rol } = req.body;
+
+    connection = await conectarBDMySql();
+
+    const [result] = await connection.execute(
+      `UPDATE usuarios SET id_rol = ? WHERE id_usuario = ?`,
+      [id_rol, id_usuario]
+    );
+
+    res.status(200).json({
+      message: "Rol modificado exitosamente.",
+      status: "OK",
+    });
+  } catch (error) {
+    console.error("❌ Cambiar Rol de usuario:", error);
+    res.status(500).json({
+      message: "Error al cambiar el rol del usuario: " + error.message,
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
+
 export {
   obtenerUsuarios,
   obtenerUsuarioId,
@@ -454,4 +489,5 @@ export {
   verificarUsuario,
   validarCodigo,
   changePassword,
+  editarRolUsuario,
 };

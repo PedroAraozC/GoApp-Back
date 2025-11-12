@@ -69,7 +69,7 @@ const obtenerRol = async (req, res) => {
   let connection;
   try {
     connection = await conectarBDMySql();
-    const [result] = await connection.execute("SELECT * FROM roles");
+    const [result] = await connection.execute("SELECT * FROM roles WHERE habilita = 1");
     res.json({ result });
   } catch (error) {
     console.error("❌ Error al obtener roles:", error);
