@@ -40,7 +40,7 @@ const iniciarViaje = async (req, res) => {
     }
 
     connection = await conectarBDMySql();
-
+    /* Paso 1 */
     // 1) Insertar el viaje en la BD
     const [result] = await connection.execute(
       `INSERT INTO viajes
