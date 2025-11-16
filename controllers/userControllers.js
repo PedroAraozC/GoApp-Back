@@ -246,20 +246,36 @@ const actualizarUsuario = async (req, res) => {
 
   try {
     let { id } = req.params;
-    let { dni, fecha_nacimiento, id_genero, telefono_usuario, email } =
+
+    // 👇 alineamos nombres con lo que viene desde Flutter
+    let { dni, fecha_nacimiento, id_genero, telefono_usuario, email_usuario } =
       req.body;
+
     connection = await conectarBDMySql();
-    console.log(req.params, "req params");
-    console.log(req.body, "req body");
-    const result = await connection.execute(
-      "UPDATE usuarios SET  dni = ?, fecha_nacimiento = ?, id_genero = ?,telefono_usuario = ?, email_usuario = ? WHERE id_usuario = ?",
-      [dni, fecha_nacimiento, id_genero, telefono_usuario, email, id]
+    console.log('req params', req.params);
+    console.log('req body', req.body);
+
+    const [result] = await connection.execute(
+      `UPDATE usuarios 
+       SET dni = ?, 
+           fecha_nacimiento = ?, 
+           id_genero = ?, 
+           telefono_usuario = ?, 
+           email_usuario = ?
+       WHERE id_usuario = ?`,
+      [dni, fecha_nacimiento, id_genero, telefono_usuario, email_usuario, id]
     );
 
-    res.json({ message: "Usuario actualizado exitosamente", status: "OK" });
+    console.log('UPDATE usuarios result:', result);
+
+    res.json({
+      message: 'Usuario actualizado exitosamente',
+      status: 'OK',
+    });
   } catch (error) {
+    console.error('❌ Error al actualizar usuario:', error);
     return res.status(500).json({
-      message: "Error al actualizar usuario. Error: " + error.message,
+      message: 'Error al actualizar usuario. Error: ' + error.message,
     });
   } finally {
     if (connection) {
@@ -267,6 +283,7 @@ const actualizarUsuario = async (req, res) => {
     }
   }
 };
+
 
 const eliminarUsuario = async (req, res) => {
   let connection;
