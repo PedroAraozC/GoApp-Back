@@ -237,9 +237,77 @@ const finalizarViaje = async (req, res) => {
   }
 };
 
+/** PUT /viajes/:id/cancelar */
+const cancelarViaje = async (req, res) => {
+  let connection;
+  try {
+    const { id } = req.params; // id_viajes
+
+    connection = await conectarBDMySql();
+
+    // Actualizamos el estado a 'Cancelado'
+    // Solo permitimos cancelar viajes que estén 'Buscando' (1) o 'Asignados' (2)
+    const [updateResult] = await connection.execute(
+      `UPDATE viajes
+       SET estado = 5,
+           fecha_fin = NOW() 
+       WHERE id_viajes = ? AND estado IN (1, 2)`,
+      [id]
+    );
+
+    if (updateResult.affectedRows === 0) {
+      return res.status(404).json({
+        message:
+          "Viaje no encontrado o en estado no válido para cancelar (ej: ya finalizado)",
+      });
+    }
+
+    const [rows] = await connection.execute(
+      "SELECT * FROM viajes WHERE id_viajes = ?",
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Viaje no encontrado" });
+    }
+
+    const v = rows[0];
+
+    // 🔊 Emitir evento al PASAJERO
+    emitir(req, "viaje_cancelado", v, { room: `pasajero_${v.id_pasajero}` });
+
+    // 🔊 Si el viaje ya tenía CONDUCTOR, notificarle
+    if (v.id_conductor) {
+      emitir(req, "viaje_cancelado", v, {
+        room: `conductor_${v.id_conductor}`,
+      });
+    }
+
+    // 🔊 Si el viaje estaba en 'Buscando' (1), avisar al room "conductores"
+    if (v.estado === 1) {
+      emitir(
+        req,
+        "viaje_cancelado_busqueda",
+        { id_viajes: v.id_viajes },
+        { room: "conductores" }
+      );
+    }
+
+    res.json({ message: "Viaje cancelado exitosamente", viaje: v });
+  } catch (error) {
+    console.error("❌ cancelarViaje:", error);
+    res
+      .status(500)
+      .json({ message: "Error al cancelar viaje: " + error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
+
 module.exports = {
   iniciarViaje,
   asignarConductor,
   comenzarViaje,
   finalizarViaje,
+  cancelarViaje,
 };
