@@ -126,7 +126,7 @@ const iniciarViaje = async (req, res) => {
 const asignarConductor = async (req, res) => {
   let connection;
   try {
-    const { id } = req.params; // este id es id_viajes
+    const { id } = req.params; // id_viajes
     const { id_conductor } = req.body;
 
     if (!id_conductor) {
@@ -137,11 +137,20 @@ const asignarConductor = async (req, res) => {
 
     connection = await conectarBDMySql();
 
-    // Usamos SIEMPRE id_viajes como PK
-    await connection.execute(
-      "UPDATE viajes SET id_conductor = ?, estado = 1 WHERE id_viajes = ?",
+    const [updateResult] = await connection.execute(
+      `UPDATE viajes
+       SET id_conductor = ?, id_estado = 1
+       WHERE id_viajes = ?
+         AND id_estado = 5`, // 👈 solo se asignan viajes que estaban BUSCANDO
       [id_conductor, id]
     );
+
+    if (updateResult.affectedRows === 0) {
+      return res.status(404).json({
+        message:
+          "Viaje no encontrado o en estado no válido para asignar (debe estar 'Buscando')",
+      });
+    }
 
     const [rows] = await connection.execute(
       "SELECT * FROM viajes WHERE id_viajes = ?",
@@ -150,9 +159,19 @@ const asignarConductor = async (req, res) => {
 
     const v = rows[0];
 
-    emitir(req, "viaje_asignado", v);
+    // Emitir al pasajero y al conductor
+    emitir(req, "viaje_asignado", v, { room: `pasajero_${v.id_pasajero}` });
+    emitir(req, "viaje_asignado", v, { room: `conductor_${v.id_conductor}` });
 
-    res.json({ result: v, message: "Conductor asignado" });
+    // Ya no está "Buscando", se lo sacamos del room general de conductores
+    emitir(
+      req,
+      "viaje_dejado_de_buscar",
+      { id_viajes: v.id_viajes },
+      { room: "conductores" }
+    );
+
+    res.json({ message: "Viaje asignado correctamente", viaje: v });
   } catch (error) {
     console.error("❌ asignarConductor:", error);
     res
@@ -163,27 +182,45 @@ const asignarConductor = async (req, res) => {
   }
 };
 
+
 /** PUT /viajes/:id/comenzar */
 const comenzarViaje = async (req, res) => {
   let connection;
   try {
     const { id } = req.params; // id_viajes
+
     connection = await conectarBDMySql();
 
-    await connection.execute(
-      "UPDATE viajes SET estado = 2, fecha_inicio = NOW() WHERE id_viajes = ?",
+    const [updateResult] = await connection.execute(
+      `UPDATE viajes
+       SET id_estado = 2,
+           hora_inicio = NOW()
+       WHERE id_viajes = ?
+         AND id_estado = 1`, // 👈 estaba ASIGNADO
       [id]
     );
+
+    if (updateResult.affectedRows === 0) {
+      return res.status(404).json({
+        message:
+          "Viaje no encontrado o en estado no válido para comenzar (debe estar 'Asignado')",
+      });
+    }
 
     const [rows] = await connection.execute(
       "SELECT * FROM viajes WHERE id_viajes = ?",
       [id]
     );
-
     const v = rows[0];
 
-    emitir(req, "viaje_en_curso", v);
-    res.json({ result: v, message: "Viaje en curso" });
+    emitir(req, "viaje_en_curso", v, {
+      room: `pasajero_${v.id_pasajero}`,
+    });
+    emitir(req, "viaje_en_curso", v, {
+      room: `conductor_${v.id_conductor}`,
+    });
+
+    res.json({ message: "Viaje comenzado correctamente", viaje: v });
   } catch (error) {
     console.error("❌ comenzarViaje:", error);
     res
@@ -194,29 +231,34 @@ const comenzarViaje = async (req, res) => {
   }
 };
 
+
 /** PUT /viajes/:id/finalizar */
 const finalizarViaje = async (req, res) => {
   let connection;
   try {
     const { id } = req.params; // id_viajes
-    const {
-      precio_final = null,
-      distancia_km = null,
-      duracion_min = null,
-    } = req.body;
+    const { precio_final, precio_estimado } = req.body || {};
 
     connection = await conectarBDMySql();
 
-    await connection.execute(
+    const precioFinalUsar = precio_final ?? precio_estimado ?? 0;
+
+    const [updateResult] = await connection.execute(
       `UPDATE viajes
-       SET estado = 4,
-           fecha_fin = NOW(),
-           precio_final = COALESCE(?, precio_final),
-           distancia_km = COALESCE(?, distancia_km),
-           duracion_min = COALESCE(?, duracion_min)
-       WHERE id_viajes = ?`,
-      [precio_final, distancia_km, duracion_min, id]
+       SET id_estado = 4,
+           hora_fin = NOW(),
+           precio_final = ?
+       WHERE id_viajes = ?
+         AND id_estado = 2`, // 👈 debe estar EN CURSO
+      [precioFinalUsar, id]
     );
+
+    if (updateResult.affectedRows === 0) {
+      return res.status(404).json({
+        message:
+          "Viaje no encontrado o en estado no válido para finalizar (debe estar 'En Curso')",
+      });
+    }
 
     const [rows] = await connection.execute(
       "SELECT * FROM viajes WHERE id_viajes = ?",
@@ -225,8 +267,14 @@ const finalizarViaje = async (req, res) => {
 
     const v = rows[0];
 
-    emitir(req, "viaje_finalizado", v);
-    res.json({ result: v, message: "Viaje finalizado" });
+    emitir(req, "viaje_finalizado", v, {
+      room: `pasajero_${v.id_pasajero}`,
+    });
+    emitir(req, "viaje_finalizado", v, {
+      room: `conductor_${v.id_conductor}`,
+    });
+
+    res.json({ message: "Viaje finalizado correctamente", viaje: v });
   } catch (error) {
     console.error("❌ finalizarViaje:", error);
     res
@@ -237,6 +285,8 @@ const finalizarViaje = async (req, res) => {
   }
 };
 
+
+/** PUT /viajes/:id/cancelar */
 /** PUT /viajes/:id/cancelar */
 const cancelarViaje = async (req, res) => {
   let connection;
@@ -245,13 +295,32 @@ const cancelarViaje = async (req, res) => {
 
     connection = await conectarBDMySql();
 
-    // Actualizamos el estado a 'Cancelado'
-    // Solo permitimos cancelar viajes que estén 'Buscando' (1) o 'Asignados' (2)
+    // 1) Traemos el viaje para saber su estado actual
+    const [rowsPrev] = await connection.execute(
+      "SELECT * FROM viajes WHERE id_viajes = ?",
+      [id]
+    );
+
+    if (rowsPrev.length === 0) {
+      return res.status(404).json({ message: "Viaje no encontrado" });
+    }
+
+    const viajeAntes = rowsPrev[0];
+
+    // Solo permitimos cancelar si está: BUSCANDO (5), ASIGNADO (1) o EN CURSO (2)
+    if (![5, 1, 2].includes(viajeAntes.id_estado)) {
+      return res.status(400).json({
+        message:
+          "Viaje en estado no válido para cancelar (ya finalizado o cancelado)",
+      });
+    }
+
+    // 2) Actualizamos a CANCELADO (3)
     const [updateResult] = await connection.execute(
       `UPDATE viajes
-       SET estado = 5,
-           fecha_fin = NOW() 
-       WHERE id_viajes = ? AND estado IN (1, 2)`,
+       SET id_estado = 3,
+           hora_fin = NOW()
+       WHERE id_viajes = ?`,
       [id]
     );
 
@@ -262,29 +331,26 @@ const cancelarViaje = async (req, res) => {
       });
     }
 
+    // 3) Obtenemos el viaje actualizado
     const [rows] = await connection.execute(
       "SELECT * FROM viajes WHERE id_viajes = ?",
       [id]
     );
 
-    if (rows.length === 0) {
-      return res.status(404).json({ message: "Viaje no encontrado" });
-    }
-
     const v = rows[0];
 
-    // 🔊 Emitir evento al PASAJERO
+    // 🔊 Notificar PASAJERO
     emitir(req, "viaje_cancelado", v, { room: `pasajero_${v.id_pasajero}` });
 
-    // 🔊 Si el viaje ya tenía CONDUCTOR, notificarle
+    // 🔊 Si tenía CONDUCTOR, notificarle
     if (v.id_conductor) {
       emitir(req, "viaje_cancelado", v, {
         room: `conductor_${v.id_conductor}`,
       });
     }
 
-    // 🔊 Si el viaje estaba en 'Buscando' (1), avisar al room "conductores"
-    if (v.estado === 1) {
+    // 🔊 Si ANTES estaba en "Buscando" (5), avisar a todos los conductores
+    if (viajeAntes.id_estado === 5) {
       emitir(
         req,
         "viaje_cancelado_busqueda",
@@ -303,6 +369,7 @@ const cancelarViaje = async (req, res) => {
     if (connection) await connection.end();
   }
 };
+
 
 module.exports = {
   iniciarViaje,
