@@ -1,5 +1,5 @@
-import Router  from "express" ;
-import { obtenerGenero, altaGenero, editaGenero, eliminaGenero } from "../controllers/generoControllers.js";
+const { Router } = require("express");
+const { obtenerGenero, altaGenero, editaGenero, eliminaGenero } = require("../controllers/generoControllers");
 
 const router = Router();
 
@@ -8,4 +8,4 @@ router.post("/altaGenero", altaGenero);
 router.put("/editaGenero", editaGenero);
 router.put("/eliminaGenero", eliminaGenero);
 
-export default router;
+module.exports = router;

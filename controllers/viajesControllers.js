@@ -40,7 +40,7 @@ const iniciarViaje = async (req, res) => {
     }
 
     connection = await conectarBDMySql();
-    /* Paso 1 */
+
     // 1) Insertar el viaje en la BD
     const [result] = await connection.execute(
       `INSERT INTO viajes
@@ -194,7 +194,7 @@ const comenzarViaje = async (req, res) => {
     const [updateResult] = await connection.execute(
       `UPDATE viajes
        SET id_estado = 2,
-           hora_inicio = NOW()
+           fecha_inicio = NOW()
        WHERE id_viajes = ?
          AND id_estado = 1`, // 👈 estaba ASIGNADO
       [id]
@@ -246,7 +246,7 @@ const finalizarViaje = async (req, res) => {
     const [updateResult] = await connection.execute(
       `UPDATE viajes
        SET id_estado = 4,
-           hora_fin = NOW(),
+           fecha_fin = NOW(),
            precio_final = ?
        WHERE id_viajes = ?
          AND id_estado = 2`, // 👈 debe estar EN CURSO
