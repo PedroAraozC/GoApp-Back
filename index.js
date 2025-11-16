@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 // index.js
 const express = require("express");
 const http = require("http");
@@ -15,6 +16,16 @@ const viajesRoutes = require("./routes/viajesRoutes");
 // Socket
 const { setupSocket } = require("./socket"); // 👈 Importamos socket.js
 
+=======
+import express from "express";
+import dotenv from "dotenv";
+import moment from "moment-timezone";
+import cors from "cors";
+import conductorRoutes from "./routes/conductorRoutes.js";
+import usuarioRoutes from "./routes/usuarioRoutes.js";
+import generoRoutes from "./routes/generoRoutes.js";
+import rolesRoutes from "./routes/rolesRoutes.js";
+>>>>>>> 22b722e465c21f174dc42aed5f307e8108c6e0ba
 dotenv.config();
 
 const app = express();

@@ -1,4 +1,4 @@
-const mysql = require("mysql2/promise");
+import mysql from "mysql2/promise";
 
 const conectarBDMySql = async () => {
   try {
@@ -17,4 +17,4 @@ const conectarBDMySql = async () => {
   }
 };
 
-module.exports = { conectarBDMySql };
+export { conectarBDMySql };
