@@ -1,13 +1,21 @@
 // socket.js
 const { Server } = require("socket.io");
+const { guardarMensaje } = require("./controllers/chatController");
 
 exports.setupSocket = (server, app) => {
   const io = new Server(server, {
     cors: {
       origin: "*",
       methods: ["GET", "POST", "PUT", "DELETE"],
+      credentials: true,
     },
+    transports: ['websocket', 'polling'], // Permitir ambos transportes
+    allowEIO3: true, // Compatibilidad con versiones anteriores
+    pingTimeout: 60000, // 60 segundos
+    pingInterval: 25000, // 25 segundos
   });
+  
+  console.log('🔌 Socket.IO configurado y listo para conexiones');
 
   // Guardamos io en Express para usarlo en los controladores (viajesControllers, etc.)
   app.set("io", io);
@@ -27,16 +35,23 @@ exports.setupSocket = (server, app) => {
       socket.data.id_usuario = id_usuario;
       socket.data.tipo = tipo;
 
-      // Chofer → sala "conductores"
+      // Chofer → sala "conductores" + sala individual
       if (tipo === "conductor") {
         socket.join("conductores");
-        console.log(`🚕 Conductor ${id_usuario} unido a sala "conductores"`);
+        socket.join(`conductor_${id_usuario}`);
+        console.log(
+          `🚕 Conductor ${id_usuario} unido a salas "conductores" y "conductor_${id_usuario}"`
+        );
+        console.log(`📌 [Socket] Rooms del conductor ${id_usuario}:`, Array.from(socket.rooms));
       }
 
-      // Pasajero → sala "pasajeros" (opcional)
+      // Pasajero → sala "pasajeros" + sala individual
       if (tipo === "pasajero") {
         socket.join("pasajeros");
-        console.log(`🧍 Pasajero ${id_usuario} unido a sala "pasajeros"`);
+        socket.join(`pasajero_${id_usuario}`);
+        console.log(
+          `🧍 Pasajero ${id_usuario} unido a salas "pasajeros" y "pasajero_${id_usuario}"`
+        );
       }
 
       console.log("📌 Rooms actuales del socket:", socket.rooms);
@@ -50,15 +65,125 @@ exports.setupSocket = (server, app) => {
 
       if (tipo === "conductor") {
         socket.leave("conductores");
-        console.log(`🚕 Conductor ${id_usuario} salió de "conductores"`);
+        socket.leave(`conductor_${id_usuario}`);
+        console.log(
+          `🚕 Conductor ${id_usuario} salió de "conductores" y "conductor_${id_usuario}"`
+        );
       }
 
       if (tipo === "pasajero") {
         socket.leave("pasajeros");
-        console.log(`🧍 Pasajero ${id_usuario} salió de "pasajeros"`);
+        socket.leave(`pasajero_${id_usuario}`);
+        console.log(
+          `🧍 Pasajero ${id_usuario} salió de "pasajeros" y "pasajero_${id_usuario}"`
+        );
       }
 
       console.log("📌 Rooms luego de salir:", socket.rooms);
+    });
+
+    // Unirse a un room por ID de viaje (para seguimiento en tiempo real)
+    socket.on("join_viaje", ({ id_viaje, user_id, tipo }) => {
+      const room = `viaje_${id_viaje}`;
+      socket.join(room);
+      console.log(`📍 Usuario ${user_id} (${tipo}) unido a room ${room} para seguimiento`);
+      
+      // Notificar a otros usuarios en el viaje
+      socket.to(room).emit("usuario_unido_viaje", {
+        id_viaje,
+        user_id,
+        tipo,
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    // Salir del room de viaje
+    socket.on("leave_viaje", ({ id_viaje, user_id }) => {
+      const room = `viaje_${id_viaje}`;
+      socket.leave(room);
+      console.log(`📍 Usuario ${user_id} salió del room ${room}`);
+    });
+
+    // ========================================
+    // SEGUIMIENTO EN TIEMPO REAL DE UBICACIÓN
+    // ========================================
+    socket.on("ubicacion_actualizada", (data) => {
+      const { id_viaje, lat, lng, id_usuario, tipo } = data;
+      
+      if (!id_viaje || !lat || !lng || !id_usuario || !tipo) {
+        console.log("❌ ubicacion_actualizada datos incompletos");
+        return;
+      }
+
+      const room = `viaje_${id_viaje}`;
+      const payload = {
+        id_viaje,
+        lat: Number(lat),
+        lng: Number(lng),
+        id_usuario,
+        tipo,
+        timestamp: new Date().toISOString()
+      };
+
+      // Emitir a todos en el room del viaje (pasajero y conductor)
+      io.to(room).emit("ubicacion_en_tiempo_real", payload);
+      console.log(`📍 Ubicación actualizada en viaje ${id_viaje} - ${tipo} ${id_usuario}`);
+    });
+
+    // ========================================
+    // JOIN A ROOM DE CHAT
+    // ========================================
+    socket.on("join_chat", (data) => {
+      const { idViaje, idUsuario, tipo } = data;
+
+      if (!idViaje || !idUsuario) {
+        console.log("❌ join_chat sin idViaje/idUsuario");
+        return;
+      }
+
+      const room = `viaje_${idViaje}`;
+      socket.join(room);
+
+      console.log(`📌 Usuario ${idUsuario} (${tipo}) se unió a room ${room}`);
+
+      // Avisar al otro usuario que alguien entró
+      io.to(room).emit("user_joined", {
+        idUsuario,
+        tipo,
+        mensaje: `${tipo} se unió al chat`
+      });
+    });
+
+    // ========================================
+    // ENVÍO DE MENSAJES
+    // ========================================
+    socket.on("send_message", async (data) => {
+      const { idViaje, idEmisor, mensaje } = data;
+
+      if (!idViaje || !idEmisor || !mensaje) {
+        console.log("❌ send_message datos incompletos");
+        return;
+      }
+
+      const room = `viaje_${idViaje}`;
+
+      console.log(`✉️ Mensaje en ${room} de ${idEmisor}: ${mensaje}`);
+
+      try {
+        // Guardar mensaje usando el controller
+        await guardarMensaje(idViaje, idEmisor, mensaje);
+
+        // Reenviar mensaje al otro usuario
+        io.to(room).emit("new_message", {
+          idViaje,
+          idEmisor,
+          mensaje,
+          timestamp: new Date().toISOString()
+        });
+
+      } catch (err) {
+        console.error("❌ Error guardando mensaje:", err);
+      }
     });
 
     // ================================
@@ -66,7 +191,7 @@ exports.setupSocket = (server, app) => {
     // ================================
     socket.on("disconnect", (reason) => {
       console.log("🔴 Cliente desconectado:", socket.id, "Motivo:", reason);
-      // Si quisieras, acá podrías chequear socket.data.tipo y sacarlo de rooms, etc.
+      // Podrías usar socket.data.id_usuario / tipo si querés hacer limpieza extra
     });
   });
 

@@ -47,7 +47,7 @@ const cambiarEstadoConductor = async (req, res) => {
     if (!id_usuario) {
       return res
         .status(400)
-        .json({ message: "id_conductor es requerido en el body" });
+        .json({ message: "id_usuario es requerido en el body" });
     }
 
     // Normalizamos el valor a 0/1
@@ -81,7 +81,7 @@ const cambiarEstadoConductor = async (req, res) => {
       req,
       "conductor_estado_actualizado",
       {
-        id_conductor,
+        id_usuario,
         conectado: valorConectado === 1,
         conductor: conductorActualizado,
       },

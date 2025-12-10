@@ -1,4 +1,4 @@
-import  {conectarBDMySql} from "../config/dbMYSQL.js";
+const { conectarBDMySql } = require("../config/dbMYSQL");
 
 const obtenerGenero = async (req, res) => {
   let connection;
@@ -89,4 +89,4 @@ const eliminaGenero = async (req, res) => {
   }
 };
 
-export { obtenerGenero, altaGenero, editaGenero, eliminaGenero };
+module.exports = { obtenerGenero, altaGenero, editaGenero, eliminaGenero };
