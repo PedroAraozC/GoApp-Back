@@ -1,61 +1,49 @@
-import express from "express";
-import dotenv from "dotenv";
-import moment from "moment-timezone";
-import cors from "cors";
-import http from "http";
-import { Server } from "socket.io";
+// index.js
+const express = require("express");
+const http = require("http");
+const dotenv = require("dotenv");
+const moment = require("moment-timezone");
+const cors = require("cors");
 
 // Rutas
-import usuarioRoutes from "./routes/usuarioRoutes.js";
-import viajesRoutes from "./routes/ViajesRoutes.js";
-import rolesRoutes from "./routes/rolesRoutes.js";
-import generoRoutes from "./routes/generoRoutes.js";
-import {cancelarViajeSocket}  from "./controllers/viajesControllers.js";
+const conductorRoutes = require("./routes/conductorRoutes");
+const usuarioRoutes = require("./routes/usuarioRoutes");
+const generoRoutes = require("./routes/generoRoutes");
+const rolesRoutes = require("./routes/rolesRoutes");
+const viajesRoutes = require("./routes/viajesRoutes");
+
+// Socket
+const { setupSocket } = require("./socket"); // 👈 Importamos socket.js
 
 dotenv.config();
+
 const app = express();
-const server = http.createServer(app);
+const PORT = process.env.PORT || 3000;
 
-// 🔥 Configuración de Socket.IO
-const io = new Server(server, {
-  cors: {
-    origin: "*", // ⚠️ Ajustá según tu frontend (ej. "http://localhost:5173" o tu dominio)
-    methods: ["GET", "POST", "PUT", "DELETE"],
-  },
-});
+moment.tz.setDefault("America/Argentina/Buenos_Aires");
 
-app.set("io", io); // ✅ Hace que los controladores puedan usar Socket.IO
-
-// Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 🔹 Rutas
+// Rutas API
+app.use("/conductores", conductorRoutes);
 app.use("/usuarios", usuarioRoutes);
-app.use("/viajes", viajesRoutes);
 app.use("/roles", rolesRoutes);
 app.use("/generos", generoRoutes);
+app.use("/viajes", viajesRoutes);
 
-// 🔥 Eventos globales de conexión
-io.on("connection", (socket) => {
-  socket.on("usuario_conectado", (data) => {
-    console.log("🟢 Usuario conectado:", data);
-    io.emit("usuario_estado", { ...data, conectado: true });
-  });
+// ===============================
+// 🔥 CONFIGURAR SERVIDOR HTTP + SOCKET.IO
+// ===============================
+const server = http.createServer(app);
 
-  socket.on("disconnect", () => {
-    console.log("🔴 Usuario desconectado");
-  });
+// Socket.IO inicializado (pasa server + app)
+setupSocket(server, app);
 
-  socket.on("viaje_cancelado", async (data) => {
-    console.log("📨 Recibido evento 'viaje_cancelado' desde cliente:", data);
-    await cancelarViajeSocket(io, data);
-  });
-});
-
-// Iniciar servidor
-const PORT = process.env.PORT || 3000;
+// ===============================
+// 🔥 LEVANTAR SERVIDOR
+// ===============================
 server.listen(PORT, () => {
-  console.log(`🚀 Servidor escuchando en http://localhost:${PORT}`);
+  console.log(`Servidor escuchando en http://localhost:${PORT} 🚕🔥`);
 });
