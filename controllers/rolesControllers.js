@@ -1,34 +1,9 @@
-import { conectarBDMySql } from "../config/dbMYSQL.js";
+const { conectarBDMySql } = require("../config/dbMYSQL");
 
-const emitir = (req, evento, data) => {
-  const io = req.app.get("io");
-  if (io) io.emit(evento, data);
-};
-/* ================================
-   🔹 CREATE - POST /roles/altaRol
-   ================================ */
-const crearRol = async (req, res) => {
-  let connection;
-  try {
-    const { nombre_rol } = req.body;
-    connection = await conectarBDMySql();
-    const [result] = await connection.execute(
-      "INSERT INTO roles (nombre_rol) VALUES (?)",
-      [nombre_rol]
-    );
-    const [rows] = await connection.execute(
-      "SELECT * FROM roles WHERE id_rol = ?",
-      [result.insertId]
-    );
 
-    emitir(req, "rol_creado", rows[0]);
-    res.status(201).json({ message: "Rol creado", result: rows[0] });
-  } catch (error) {
-    res.status(500).json({ message: "Error al crear rol: " + error.message });
-  } finally {
-    if (connection) await connection.end();
-  }
-};
+/* C R U D */
+
+/* Create */
 const altaRol = async (req, res) => {
   let connection;
   try {
@@ -153,4 +128,4 @@ const eliminarRol = async (req, res) => {
   }
 };
 
-export { altaRol, obtenerRol, editaRol, eliminarRol, crearRol };
+module.exports = { altaRol, obtenerRol, editaRol, eliminarRol };

@@ -1,5 +1,14 @@
-import  Router  from "express";
+const { Router } = require("express");
+const {
+  cambiarEstadoConductor,
+  obtenerCarnetConductor, // ✅ NUEVO
+} = require("../controllers/conductorControllers");
 
 const router = Router();
 
-export default router;
+router.put("/cambiarEstado", cambiarEstadoConductor);
+
+// ✅ NUEVO: Carnet Digital
+router.get("/:idUsuario/carnet", obtenerCarnetConductor);
+
+module.exports = router;

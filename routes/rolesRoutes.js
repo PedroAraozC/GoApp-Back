@@ -1,10 +1,5 @@
-import { Router } from "express";
-import {
-  altaRol,
-  obtenerRol,
-  editaRol,
-  eliminarRol,
-} from "../controllers/rolesControllers.js";
+const { Router } = require("express");
+const { altaRol, obtenerRol, editaRol, eliminarRol } = require("../controllers/rolesControllers");
 
 const router = Router();
 
@@ -13,4 +8,4 @@ router.post("/altaRol", altaRol);
 router.put("/editaGenero", editaRol);
 router.put("/eliminarRol", eliminarRol);
 
-export default router;
+module.exports = router;

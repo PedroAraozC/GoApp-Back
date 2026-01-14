@@ -141,3 +141,10 @@ export const eliminaGenero = async (req, res) => {
     if (connection) await connection.end();
   }
 };
+
+export default {
+  obtenerGenero,
+  altaGenero,
+  editaGenero,
+  eliminaGenero,
+};

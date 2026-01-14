@@ -11,6 +11,7 @@ const usuarioRoutes = require("./routes/usuarioRoutes");
 const generoRoutes = require("./routes/generoRoutes");
 const rolesRoutes = require("./routes/rolesRoutes");
 const viajesRoutes = require("./routes/viajesRoutes");
+const chatRoutes = require("./routes/chatRoutes");
 
 // Socket
 const { setupSocket } = require("./socket"); // 👈 Importamos socket.js
@@ -32,6 +33,7 @@ app.use("/usuarios", usuarioRoutes);
 app.use("/roles", rolesRoutes);
 app.use("/generos", generoRoutes);
 app.use("/viajes", viajesRoutes);
+app.use("/chat", chatRoutes);
 
 // ===============================
 // 🔥 CONFIGURAR SERVIDOR HTTP + SOCKET.IO
