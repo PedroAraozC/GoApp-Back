@@ -1,6 +1,6 @@
 import { conectarBDMySql } from "../config/dbMYSQL.js";
 
-const obtener = async (req, res) => {
+export const obtener = async (req, res) => {
   let connection;
   try {
     connection = await conectarBDMySql();
@@ -17,4 +17,3 @@ const obtener = async (req, res) => {
   }
 };
 
-export { obtener };
