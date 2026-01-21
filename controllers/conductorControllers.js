@@ -116,20 +116,22 @@ const obtenerCarnetConductor = async (req, res) => {
 
     connection = await conectarBDMySql();
 
-    // Ajustado a los campos que se ven en tu conductoresControllers.js (plural):
-    // - usuarios: nombre_usuario, apellido_usuario
-    // - conductores: modelo_vehiculo / marca_vehiculo / matricula (según tu DB)
     const [rows] = await connection.execute(
       `
       SELECT 
-        u.nombre_usuario,
-        u.apellido_usuario,
-        c.matricula,
-        c.marca_vehiculo,
-        c.modelo_vehiculo,
-        v.id_estado_validacion,
-        e.nombre_estado,
-        u.created_at
+        u.nombre_usuario   AS nombre_usuario,
+        u.apellido_usuario AS apellido_usuario,
+        u.foto_perfil      AS foto_url,
+
+        c.matricula       AS matricula,
+        c.marca_vehiculo  AS marca_vehiculo,
+        c.modelo_vehiculo AS modelo_vehiculo,
+
+        -- ✅ CAMBIO ACÁ (antes era c.created_at)
+        u.fecha_carga AS created_at,
+
+        v.id_estado_validacion AS id_estado_validacion,
+        e.nombre_estado AS nombre_estado
       FROM conductores c
       LEFT JOIN usuarios u ON c.id_usuario = u.id_usuario
       LEFT JOIN validacion_conductor v ON c.id_usuario = v.id_usuario
@@ -145,8 +147,9 @@ const obtenerCarnetConductor = async (req, res) => {
     }
 
     const row = rows[0];
+    console.log("🧾 ROW carnet:", row);
 
-    // Viajes totales (si tu viajes.id_conductor guarda id_usuario)
+    // Viajes totales (ojo si viajes.id_conductor NO es id_usuario)
     let viajesTotales = 0;
     try {
       const [v] = await connection.execute(
@@ -154,9 +157,10 @@ const obtenerCarnetConductor = async (req, res) => {
         [idUsuario]
       );
       viajesTotales = v?.[0]?.total ?? 0;
-    } catch (_) {}
+    } catch (e) {
+      console.log("⚠️ Error contando viajes:", e.message);
+    }
 
-    // Verificado: ajustá si tu tabla usa otro valor
     const estadoTxt = (row.nombre_estado || "").toString().toLowerCase();
     const verificado =
       row.id_estado_validacion === 2 ||
@@ -171,11 +175,11 @@ const obtenerCarnetConductor = async (req, res) => {
     const data = {
       nombre: row.nombre_usuario ?? "",
       apellido: row.apellido_usuario ?? "",
-      foto_url: "", // si tenés foto en usuarios, poné el campo acá
-      patente: row.matricula ?? "", // en tu DB lo vi como matricula
+      foto_url: row.foto_url ?? "",
+      patente: row.matricula ?? "",
       modelo_vehiculo: row.modelo_vehiculo ?? row.marca_vehiculo ?? "",
-      color_vehiculo: "", // si no existe, queda vacío y Flutter lo normaliza
-      rating: 0, // si no tenés tabla de calificaciones, queda 0
+      color_vehiculo: "",
+      rating: 0,
       viajes_totales: viajesTotales,
       fecha_ingreso: fechaIngreso,
       verificado,
@@ -191,6 +195,7 @@ const obtenerCarnetConductor = async (req, res) => {
     if (connection) await connection.end();
   }
 };
+
 
 
 
