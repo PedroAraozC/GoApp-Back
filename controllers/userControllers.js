@@ -127,8 +127,8 @@ const google_login = async (req, res) => {
       user = existingUser[0];
     } else {
       const [result] = await connection.execute(
-        "INSERT INTO usuarios (nombre_usuario, email_usuario, google_id, foto_perfil) VALUES (?, ?, ?, ?)",
-        [name, email, google_id, picture]
+        "INSERT INTO usuarios (nombre_usuario, email_usuario, google_id, foto_perfil, auth_prvider) VALUES (?, ?, ?, ?, ?)",
+        [name, email, google_id, picture, "google"]
       );
       const [newUser] = await connection.execute(
         "SELECT * FROM usuarios WHERE id_usuario = ?",
