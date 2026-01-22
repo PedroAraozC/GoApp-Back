@@ -1,92 +1,150 @@
-import  {conectarBDMySql} from "../config/dbMYSQL.js";
+import { conectarBDMySql } from "../config/dbMYSQL.js";
 
-const obtenerGenero = async (req, res) => {
+const emitir = (req, evento, data) => {
+  const io = req.app.get("io");
+  if (io) io.emit(evento, data);
+};
+
+/** ===========================
+ *  GET /generos/obtenerGenero
+ *  Devuelve todos los géneros
+ * =========================== */
+export const obtenerGenero = async (req, res) => {
   let connection;
   try {
     connection = await conectarBDMySql();
-    const result = await connection.execute("SELECT * FROM generos");
-    res.json({ result: result[0] });
+    const [result] = await connection.execute("SELECT * FROM generos");
+    res.json({ result });
   } catch (error) {
-    console.log("Hubo un error :(", error);
+    console.error("❌ Error al obtener géneros:", error);
+    res.status(500).json({ message: "Error al obtener géneros." });
   } finally {
-    if (connection) {
-      await connection.end();
-    }
+    if (connection) await connection.end();
   }
 };
 
-
-
-const altaGenero = async (req, res) => {
+/** ===========================
+ *  POST /generos/altaGenero
+ *  Crea un nuevo género
+ * =========================== */
+export const altaGenero = async (req, res) => {
   let connection;
   try {
     const { nombre_genero, habilita } = req.body;
+    if (!nombre_genero) {
+      return res
+        .status(400)
+        .json({ message: "El nombre del género es obligatorio." });
+    }
+
     connection = await conectarBDMySql();
-    const result = await connection.execute(
-      "INSERT INTO generos (nombre_genero, habilita) values(?,?)",
-      [nombre_genero, habilita]
+    const [result] = await connection.execute(
+      "INSERT INTO generos (nombre_genero, habilita) VALUES (?, ?)",
+      [nombre_genero, habilita ?? 1]
     );
 
-    res.json({ message: "Se creó correctamente el genero.", status: "ok" });
+    const [rows] = await connection.execute(
+      "SELECT * FROM generos WHERE id_genero = ?",
+      [result.insertId]
+    );
+
+    emitir(req, "genero_actualizado", {
+      accion: "alta",
+      result: rows[0],
+    });
+
+    res.json({ message: "Género creado correctamente", status: "ok", result: rows[0] });
   } catch (error) {
-    console.log("Hubo un error :(", error);
+    console.error("❌ Error al crear género:", error);
+    res.status(500).json({ message: "Error al crear género." });
   } finally {
-    if (connection) {
-      await connection.end();
-    }
+    if (connection) await connection.end();
   }
 };
 
-
-const editaGenero = async (req, res) => {
+/** ===========================
+ *  PUT /generos/editaGenero
+ *  Actualiza un género existente
+ * =========================== */
+export const editaGenero = async (req, res) => {
   let connection;
   try {
     const { id_genero, nombre_genero, habilita } = req.body;
+    if (!id_genero) {
+      return res
+        .status(400)
+        .json({ message: "El ID del género es obligatorio." });
+    }
 
     connection = await conectarBDMySql();
-
-    const result = await connection.execute(
-      "UPDATE generos SET nombre_genero = ?, habilita = ? where id_genero = ?",
-      [nombre_genero, habilita, id_genero]
+    await connection.execute(
+      "UPDATE generos SET nombre_genero = ?, habilita = ? WHERE id_genero = ?",
+      [nombre_genero, habilita ?? 1, id_genero]
     );
 
+    const [rows] = await connection.execute(
+      "SELECT * FROM generos WHERE id_genero = ?",
+      [id_genero]
+    );
+
+    emitir(req, "genero_actualizado", {
+      accion: "edicion",
+      result: rows[0],
+    });
+
     res.json({
-      message: `Se editó correctamente el genero: ${nombre_genero}`,
+      message: `Género editado correctamente`,
       status: "ok",
+      result: rows[0],
     });
   } catch (error) {
-    console.log("Hubo un error :(", error);
+    console.error("❌ Error al editar género:", error);
+    res.status(500).json({ message: "Error al editar género." });
   } finally {
-    if (connection) {
-      await connection.end();
-    }
+    if (connection) await connection.end();
   }
 };
 
-const eliminaGenero = async (req, res) => {
+/** ===========================
+ *  PUT /generos/eliminaGenero
+ *  Deshabilita un género
+ * =========================== */
+export const eliminaGenero = async (req, res) => {
   let connection;
   try {
-    const { id_genero, nombre_genero } = req.body;
+    const { id_genero } = req.body;
+    if (!id_genero) {
+      return res
+        .status(400)
+        .json({ message: "El ID del género es obligatorio." });
+    }
 
     connection = await conectarBDMySql();
-
-    const [result] = await connection.execute(
+    await connection.execute(
       "UPDATE generos SET habilita = 0 WHERE id_genero = ?",
       [id_genero]
     );
 
+    emitir(req, "genero_actualizado", {
+      accion: "eliminacion",
+      id_genero,
+    });
+
     res.json({
-      message: `Se actualizó correctamente el estado del género con ID: ${nombre_genero}`,
+      message: `Género deshabilitado correctamente`,
       status: "ok",
     });
   } catch (error) {
-    console.error("Hubo un error :(", error);
-    res.status(500).json({ message: "Error en el servidor" });
+    console.error("❌ Error al eliminar género:", error);
+    res.status(500).json({ message: "Error al eliminar género." });
   } finally {
-    if (connection) {
-      await connection.end();
-    }
+    if (connection) await connection.end();
   }
 };
 
-export { obtenerGenero, altaGenero, editaGenero, eliminaGenero };
+export default {
+  obtenerGenero,
+  altaGenero,
+  editaGenero,
+  eliminaGenero,
+};

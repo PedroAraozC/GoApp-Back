@@ -1,5 +1,5 @@
-import Router  from "express";
-import {
+const { Router } = require("express");
+const {
   obtenerUsuarios,
   obtenerUsuarioId,
   crearUsuario,
@@ -7,7 +7,7 @@ import {
   eliminarUsuario,
   login,
   google_login,
-} from "../controllers/userControllers.js";
+} = require("../controllers/userControllers");
 
 const router = Router();
 
@@ -19,4 +19,4 @@ router.put("/eliminarUsuario/:id", eliminarUsuario);
 router.post("/login", login);
 router.post("/google_login", google_login);
 
-export default router;
+module.exports = router;

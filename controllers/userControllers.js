@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import   {conectarBDMySql}  from "../config/dbMYSQL.js";
-import   {OAuth2Client}  from "google-auth-library";
+import { conectarBDMySql } from "../config/dbMYSQL.js";
+import { OAuth2Client } from "google-auth-library";
 
 const client = new OAuth2Client(
   "125703789007-thjq5cpij6blij34sv8g404pq6ubnhjv.apps.googleusercontent.com"
@@ -9,17 +9,14 @@ const client = new OAuth2Client(
 
 const obtenerUsuarios = async (req, res) => {
   let connection;
-
   try {
     connection = await conectarBDMySql();
-    const result = await connection.execute("SELECT * FROM usuarios");
-    res.json({ result: result[0] });
+    const [result] = await connection.execute("SELECT * FROM usuarios");
+    res.json({ result });
   } catch (error) {
     return res.status(500).json({ message: "Error al obtener usuarios" });
   } finally {
-    if (connection) {
-      await connection.end();
-    }
+    if (connection) await connection.end();
   }
 };
 
@@ -46,13 +43,15 @@ const obtenerUsuarioId = async (req, res) => {
   }
 };
 
+/* ==========================================
+   🔹 Login clásico y Google
+   ========================================== */
 const login = async (req, res) => {
   let connection;
   let { email, password } = req.body;
   console.log(req.body);
   try {
     connection = await conectarBDMySql();
-
     const [rows] = await connection.execute(
       "SELECT * FROM usuarios WHERE email_usuario = ?",
       [email]
@@ -80,21 +79,16 @@ const login = async (req, res) => {
       message: "Inicio de sesión exitoso.",
     });
   } catch (error) {
-    return res.status(500).json({ message: "Error en el login." });
+    res.status(500).json({ message: "Error en el login." });
   } finally {
-    if (connection) {
-      await connection.end();
-    }
+    if (connection) await connection.end();
   }
 };
 
 const google_login = async (req, res) => {
   const { token } = req.body;
+  const io = req.app.get("io");
   let connection;
-
-  if (!token) {
-    return res.status(400).json({ message: "No se proporcionó el token." });
-  }
 
   try {
     const ticket = await client.verifyIdToken({
@@ -120,7 +114,6 @@ const google_login = async (req, res) => {
     );
 
     let user;
-
     if (existingUser.length > 0) {
       user = existingUser[0];
     } else {
@@ -128,23 +121,22 @@ const google_login = async (req, res) => {
         "INSERT INTO usuarios (nombre_usuario, email_usuario, google_id, foto_perfil) VALUES (?, ?, ?, ?)",
         [name, email, google_id, picture]
       );
-
       const [newUser] = await connection.execute(
         "SELECT * FROM usuarios WHERE id_usuario = ?",
         [result.insertId]
       );
-
       user = newUser[0];
+
+      io.emit("usuario_creado", user);
     }
 
     const tokenJWT = jwt.sign(
-      {
-        id_usuario: user.id_usuario,
-        email: user.email_usuario,
-      },
+      { id_usuario: user.id_usuario, email: user.email_usuario },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
+
+    io.emit("usuario_login", { id_usuario: user.id_usuario });
 
     res.status(201).json({
       result: user,
@@ -152,10 +144,8 @@ const google_login = async (req, res) => {
       message: "Inicio de sesión con Google exitoso.",
     });
   } catch (error) {
-    console.error("Error en la autenticación con Google:", error);
-    return res
-      .status(500)
-      .json({ message: "Error en la autenticación con Google." });
+    console.error("Error en Google Login:", error);
+    res.status(500).json({ message: "Error en la autenticación con Google." });
   } finally {
     if (connection) {
       await connection.end();
@@ -246,20 +236,36 @@ const actualizarUsuario = async (req, res) => {
 
   try {
     let { id } = req.params;
-    let { dni, fecha_nacimiento, id_genero, telefono_usuario, email } =
+
+    // 👇 alineamos nombres con lo que viene desde Flutter
+    let { dni, fecha_nacimiento, id_genero, telefono_usuario, email_usuario } =
       req.body;
+
     connection = await conectarBDMySql();
-    console.log(req.params, "req params");
-    console.log(req.body, "req body");
-    const result = await connection.execute(
-      "UPDATE usuarios SET  dni = ?, fecha_nacimiento = ?, id_genero = ?,telefono_usuario = ?, email_usuario = ? WHERE id_usuario = ?",
-      [dni, fecha_nacimiento, id_genero, telefono_usuario, email, id]
+    console.log('req params', req.params);
+    console.log('req body', req.body);
+
+    const [result] = await connection.execute(
+      `UPDATE usuarios 
+       SET dni = ?, 
+           fecha_nacimiento = ?, 
+           id_genero = ?, 
+           telefono_usuario = ?, 
+           email_usuario = ?
+       WHERE id_usuario = ?`,
+      [dni, fecha_nacimiento, id_genero, telefono_usuario, email_usuario, id]
     );
 
-    res.json({ message: "Usuario actualizado exitosamente", status: "OK" });
+    console.log('UPDATE usuarios result:', result);
+
+    res.json({
+      message: 'Usuario actualizado exitosamente',
+      status: 'OK',
+    });
   } catch (error) {
+    console.error('❌ Error al actualizar usuario:', error);
     return res.status(500).json({
-      message: "Error al actualizar usuario. Error: " + error.message,
+      message: 'Error al actualizar usuario. Error: ' + error.message,
     });
   } finally {
     if (connection) {
@@ -267,6 +273,7 @@ const actualizarUsuario = async (req, res) => {
     }
   }
 };
+
 
 const eliminarUsuario = async (req, res) => {
   let connection;
@@ -291,7 +298,6 @@ const eliminarUsuario = async (req, res) => {
     }
   }
 };
-
 export {
   obtenerUsuarios,
   obtenerUsuarioId,
