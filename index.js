@@ -31,6 +31,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/conductores", conductorRoutes);
 app.use("/usuarios", usuarioRoutes);
 app.use("/roles", rolesRoutes);
+app.use("/conductores", conductorRoutes);
 app.use("/generos", generoRoutes);
 app.use("/viajes", viajesRoutes);
 app.use("/chat", chatRoutes);

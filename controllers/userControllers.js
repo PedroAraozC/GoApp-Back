@@ -11,7 +11,16 @@ const obtenerUsuarios = async (req, res) => {
   let connection;
   try {
     connection = await conectarBDMySql();
-    const [result] = await connection.execute("SELECT * FROM usuarios");
+    const [result] = await connection.execute(`
+  SELECT 
+    u.*, 
+    r.nombre_rol, 
+    g.nombre_genero
+  FROM usuarios u
+  LEFT JOIN roles r ON u.id_rol = r.id_rol
+  LEFT JOIN generos g ON u.id_genero = g.id_genero
+`);
+
     res.json({ result });
   } catch (error) {
     return res.status(500).json({ message: "Error al obtener usuarios" });
@@ -118,8 +127,8 @@ const google_login = async (req, res) => {
       user = existingUser[0];
     } else {
       const [result] = await connection.execute(
-        "INSERT INTO usuarios (nombre_usuario, email_usuario, google_id, foto_perfil) VALUES (?, ?, ?, ?)",
-        [name, email, google_id, picture]
+        "INSERT INTO usuarios (nombre_usuario, email_usuario, google_id, foto_perfil, auth_prvider) VALUES (?, ?, ?, ?, ?)",
+        [name, email, google_id, picture, "google"]
       );
       const [newUser] = await connection.execute(
         "SELECT * FROM usuarios WHERE id_usuario = ?",
@@ -298,6 +307,32 @@ const eliminarUsuario = async (req, res) => {
     }
   }
 };
+const editarRolUsuario = async (req, res) => {
+  let connection;
+  try {
+    const { id_usuario, id_rol } = req.body;
+
+    connection = await conectarBDMySql();
+
+    const [result] = await connection.execute(
+      `UPDATE usuarios SET id_rol = ? WHERE id_usuario = ?`,
+      [id_rol, id_usuario]
+    );
+
+    res.status(200).json({
+      message: "Rol modificado exitosamente.",
+      status: "OK",
+    });
+  } catch (error) {
+    console.error("❌ Cambiar Rol de usuario:", error);
+    res.status(500).json({
+      message: "Error al cambiar el rol del usuario: " + error.message,
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
+
 export {
   obtenerUsuarios,
   obtenerUsuarioId,
