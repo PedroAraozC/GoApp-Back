@@ -63,13 +63,13 @@ const cambiarEstadoConductor = async (req, res) => {
 
     const [result] = await connection.execute(
       "UPDATE conductores SET conectado = ? WHERE id_usuario = ?",
-      [valorConectado, id_usuario]
+      [valorConectado, id_usuario],
     );
 
     // Podés consultar el registro actualizado si querés devolverlo
     const [rows] = await connection.execute(
       "SELECT * FROM conductores WHERE id_usuario = ?",
-      [id_usuario]
+      [id_usuario],
     );
 
     const conductorActualizado = rows[0] || null;
@@ -85,7 +85,7 @@ const cambiarEstadoConductor = async (req, res) => {
         conectado: valorConectado === 1,
         conductor: conductorActualizado,
       },
-      "conductores" // room donde están conectados los choferes
+      "conductores", // room donde están conectados los choferes
     );
 
     return res.json({
@@ -139,7 +139,7 @@ const obtenerCarnetConductor = async (req, res) => {
       WHERE c.id_usuario = ?
       LIMIT 1
       `,
-      [idUsuario]
+      [idUsuario],
     );
 
     if (!rows || rows.length === 0) {
@@ -154,7 +154,7 @@ const obtenerCarnetConductor = async (req, res) => {
     try {
       const [v] = await connection.execute(
         `SELECT COUNT(*) AS total FROM viajes WHERE id_conductor = ?`,
-        [idUsuario]
+        [idUsuario],
       );
       viajesTotales = v?.[0]?.total ?? 0;
     } catch (e) {
@@ -196,8 +196,82 @@ const obtenerCarnetConductor = async (req, res) => {
   }
 };
 
+export const subirImagenConductor = async (req, res) => {
+  let connection;
 
+  try {
+    const { id_conductor, tipo_imagen } = req.body;
+    const file = req.file;
 
+    if (!file) {
+      return res.status(400).json({ message: "No se envió ninguna imagen" });
+    }
+
+    connection = await conectarBDMySql();
+
+    const rutaRelativa = file.path.replace(process.cwd(), "");
+
+    await connection.execute(
+      `INSERT INTO conductor_imagenes
+       (id_conductor, tipo_imagen, nombre_archivo, ruta_archivo, mime_type, tamaño_bytes)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        id_conductor,
+        tipo_imagen,
+        file.filename,
+        rutaRelativa,
+        file.mimetype,
+        file.size,
+      ],
+    );
+
+    res.json({
+      status: "OK",
+      message: "Imagen cargada correctamente",
+      ruta: rutaRelativa,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
+
+export const getImagenesConductor = async (req, res) => {
+  let connection;
+
+  try {
+    const { id_conductor } = req.params;
+
+    connection = await conectarBDMySql();
+
+    const [rows] = await connection.execute(
+      `SELECT tipo_imagen, ruta_archivo
+       FROM conductor_imagenes
+       WHERE id_conductor = ?
+         AND activa = 1`,
+      [id_conductor],
+    );
+
+    // Normalizamos a objeto clave → valor
+    const imagenes = {};
+    rows.forEach((img) => {
+      imagenes[img.tipo_imagen] = img.ruta_archivo;
+    });
+
+    res.json({
+      status: "OK",
+      id_conductor,
+      imagenes,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
 
 module.exports = {
   obtenerConductores,

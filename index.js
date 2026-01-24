@@ -4,6 +4,7 @@ const http = require("http");
 const dotenv = require("dotenv");
 const moment = require("moment-timezone");
 const cors = require("cors");
+const path = require("path");
 
 // Rutas
 const conductorRoutes = require("./routes/conductorRoutes");
@@ -28,13 +29,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Rutas API
-app.use("/conductores", conductorRoutes);
 app.use("/usuarios", usuarioRoutes);
 app.use("/roles", rolesRoutes);
 app.use("/conductores", conductorRoutes);
 app.use("/generos", generoRoutes);
 app.use("/viajes", viajesRoutes);
 app.use("/chat", chatRoutes);
+app.use("/uploads", express.static(path.join(__dirname, "imagenes")));
 
 // ===============================
 // 🔥 CONFIGURAR SERVIDOR HTTP + SOCKET.IO
