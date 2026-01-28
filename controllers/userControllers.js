@@ -4,7 +4,7 @@ import { conectarBDMySql } from "../config/dbMYSQL.js";
 import { OAuth2Client } from "google-auth-library";
 
 const client = new OAuth2Client(
-  "125703789007-thjq5cpij6blij34sv8g404pq6ubnhjv.apps.googleusercontent.com"
+  "125703789007-thjq5cpij6blij34sv8g404pq6ubnhjv.apps.googleusercontent.com",
 );
 
 const obtenerUsuarios = async (req, res) => {
@@ -37,7 +37,7 @@ const obtenerUsuarioId = async (req, res) => {
     connection = await conectarBDMySql();
     const result = await connection.execute(
       "SELECT * FROM usuarios WHERE id_usuario = ?",
-      [id]
+      [id],
     );
     console.log(result[0], "aaaaaa");
     res.json({ result: result[0] });
@@ -63,7 +63,7 @@ const login = async (req, res) => {
     connection = await conectarBDMySql();
     const [rows] = await connection.execute(
       "SELECT * FROM usuarios WHERE email_usuario = ?",
-      [email]
+      [email],
     );
     console.log(rows);
     if (rows.length === 0)
@@ -78,7 +78,7 @@ const login = async (req, res) => {
     const token = jwt.sign(
       { id_usuario: user.id_usuario, email: user.email_usuario },
       process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      { expiresIn: "7d" },
     );
 
     console.log(user, "Login");
@@ -119,7 +119,7 @@ const google_login = async (req, res) => {
     console.log(email);
     const [existingUser] = await connection.execute(
       "SELECT * FROM usuarios WHERE email_usuario = ? OR google_id = ?",
-      [email, google_id]
+      [email, google_id],
     );
 
     let user;
@@ -128,11 +128,11 @@ const google_login = async (req, res) => {
     } else {
       const [result] = await connection.execute(
         "INSERT INTO usuarios (nombre_usuario, email_usuario, google_id, foto_perfil, auth_prvider) VALUES (?, ?, ?, ?, ?)",
-        [name, email, google_id, picture, "google"]
+        [name, email, google_id, picture, "google"],
       );
       const [newUser] = await connection.execute(
         "SELECT * FROM usuarios WHERE id_usuario = ?",
-        [result.insertId]
+        [result.insertId],
       );
       user = newUser[0];
 
@@ -142,7 +142,7 @@ const google_login = async (req, res) => {
     const tokenJWT = jwt.sign(
       { id_usuario: user.id_usuario, email: user.email_usuario },
       process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      { expiresIn: "7d" },
     );
 
     io.emit("usuario_login", { id_usuario: user.id_usuario });
@@ -179,10 +179,10 @@ const crearUsuario = async (req, res) => {
     } = req.body;
 
     connection = await conectarBDMySql();
-
+    console.log(req.body, "creando usuario");
     const [existe] = await connection.execute(
       "SELECT * FROM usuarios WHERE email_usuario = ?",
-      [email_usuario]
+      [email_usuario],
     );
     if (existe.length > 0)
       return res.status(400).json({ message: "El email ya está registrado." });
@@ -201,7 +201,7 @@ const crearUsuario = async (req, res) => {
         telefono_usuario,
         email_usuario,
         id_rol,
-      ]
+      ],
     );
 
     console.log(
@@ -213,7 +213,7 @@ const crearUsuario = async (req, res) => {
       password,
       telefono_usuario,
       email_usuario,
-      id_rol
+      id_rol,
     );
 
     const userId = result.insertId;
@@ -221,7 +221,7 @@ const crearUsuario = async (req, res) => {
     const token = jwt.sign(
       { id_usuario: userId, email: email_usuario },
       process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      { expiresIn: "7d" },
     );
 
     res.json({
@@ -251,8 +251,8 @@ const actualizarUsuario = async (req, res) => {
       req.body;
 
     connection = await conectarBDMySql();
-    console.log('req params', req.params);
-    console.log('req body', req.body);
+    console.log("req params", req.params);
+    console.log("req body", req.body);
 
     const [result] = await connection.execute(
       `UPDATE usuarios 
@@ -262,19 +262,19 @@ const actualizarUsuario = async (req, res) => {
            telefono_usuario = ?, 
            email_usuario = ?
        WHERE id_usuario = ?`,
-      [dni, fecha_nacimiento, id_genero, telefono_usuario, email_usuario, id]
+      [dni, fecha_nacimiento, id_genero, telefono_usuario, email_usuario, id],
     );
 
-    console.log('UPDATE usuarios result:', result);
+    console.log("UPDATE usuarios result:", result);
 
     res.json({
-      message: 'Usuario actualizado exitosamente',
-      status: 'OK',
+      message: "Usuario actualizado exitosamente",
+      status: "OK",
     });
   } catch (error) {
-    console.error('❌ Error al actualizar usuario:', error);
+    console.error("❌ Error al actualizar usuario:", error);
     return res.status(500).json({
-      message: 'Error al actualizar usuario. Error: ' + error.message,
+      message: "Error al actualizar usuario. Error: " + error.message,
     });
   } finally {
     if (connection) {
@@ -282,7 +282,6 @@ const actualizarUsuario = async (req, res) => {
     }
   }
 };
-
 
 const eliminarUsuario = async (req, res) => {
   let connection;
@@ -293,7 +292,7 @@ const eliminarUsuario = async (req, res) => {
 
     const result = await connection.execute(
       "UPDATE usuarios SET habilita = 0 WHERE id_usuario = ?",
-      [id]
+      [id],
     );
 
     res.json({ message: "Usuario eliminado exitosamente", status: "OK" });
@@ -316,7 +315,7 @@ const editarRolUsuario = async (req, res) => {
 
     const [result] = await connection.execute(
       `UPDATE usuarios SET id_rol = ? WHERE id_usuario = ?`,
-      [id_rol, id_usuario]
+      [id_rol, id_usuario],
     );
 
     res.status(200).json({

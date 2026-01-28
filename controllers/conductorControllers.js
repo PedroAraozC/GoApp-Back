@@ -1,8 +1,8 @@
 // controllers/conductorControllers.js
-const { conectarBDMySql } = require("../config/dbMYSQL");
+import conectarBDMySql from "../config/dbMYSQL.js";
 
 // Helper para emitir por socket (con o sin room)
-const emitir = (req, evento, data, room = null) => {
+export const emitir = (req, evento, data, room = null) => {
   const io = req.app.get("io");
   if (!io) return;
 
@@ -13,23 +13,40 @@ const emitir = (req, evento, data, room = null) => {
   }
 };
 
-const obtenerConductores = async (req, res) => {
+export const obtenerConductores = async (req, res) => {
   let connection;
   try {
     connection = await conectarBDMySql();
-    const [rows] = await connection.execute("SELECT * FROM conductores");
-    return res.json({ result: rows });
+
+    const [result] = await connection.execute(`
+      SELECT 
+        c.id_usuario,
+        u.nombre_usuario,
+        u.apellido_usuario,
+        v.fecha_validacion,
+        v.observaciones,
+        c.matricula,
+        c.id_conductor,
+        c.nro_motor,
+        c.licencia,
+        c.vencimiento_licencia,
+        c.poliza_seguro,
+        e.nombre_estado
+      FROM conductores c
+      LEFT JOIN usuarios u ON c.id_usuario = u.id_usuario
+      LEFT JOIN validacion_conductor v ON c.id_usuario = v.id_usuario
+      LEFT JOIN estado_validacion e ON v.id_estado_validacion = e.id_estado_validacion
+    `);
+
+    res.json({ result });
   } catch (error) {
-    console.error("❌ Hubo un error en obtenerConductores:", error);
-    return res
-      .status(500)
-      .json({ message: "Error al obtener conductores: " + error.message });
+    console.error("âŒ Error al obtener conductores:", error);
+    res.status(500).json({ message: "Error al obtener conductores." });
   } finally {
-    if (connection) {
-      await connection.end();
-    }
+    if (connection) await connection.end();
   }
 };
+
 
 /**
  * PUT /conductores/cambiarEstado
@@ -39,7 +56,7 @@ const obtenerConductores = async (req, res) => {
  *    "conectado": true  // o 1 para conectado, false/0 para desconectado
  *  }
  */
-const cambiarEstadoConductor = async (req, res) => {
+export const cambiarEstadoConductor = async (req, res) => {
   let connection;
   try {
     const { id_usuario, conectado } = req.body;
@@ -105,7 +122,7 @@ const cambiarEstadoConductor = async (req, res) => {
 };
 
 // GET /conductores/:idUsuario/carnet
-const obtenerCarnetConductor = async (req, res) => {
+export const obtenerCarnetConductor = async (req, res) => {
   let connection;
   try {
     const { idUsuario } = req.params;
@@ -273,8 +290,108 @@ export const getImagenesConductor = async (req, res) => {
   }
 };
 
-module.exports = {
-  obtenerConductores,
-  cambiarEstadoConductor,
-  obtenerCarnetConductor,
+export const crearChofer = async (req, res) => {
+  let connection;
+
+  try {
+    const {
+      id_usuario,
+      licencia,
+      vencimientoLicencia,
+      vencimientoCarnet,
+      poliza,
+      vencimientoSeguro,
+      numeroMotor,
+      numeroChassis,
+      patente,
+      marca,
+      modelo,
+      anio,
+      tipoVehiculo,
+    } = req.body;
+
+    if (!id_usuario || !licencia || !patente) {
+      return res.status(400).json({
+        message: "Faltan datos obligatorios para crear el chofer",
+      });
+    }
+
+    connection = await conectarBDMySql();
+    await connection.beginTransaction();
+
+    // 1️⃣ Insertar en conductores
+    const [result] = await connection.execute(
+      `
+      INSERT INTO conductores
+      (
+        id_usuario,
+        licencia,
+        vencimiento_licencia,
+        vencimiento_carnet,
+        poliza_seguro,
+        vencimiento_seguro,
+        nro_motor,
+        nro_chasis,
+        matricula,
+        marca_vehiculo,
+        modelo_vehiculo,
+        anio_vehiculo,
+        id_tipo_vehiculo,
+        conectado,
+        habilita
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1)
+      `,
+      [
+        id_usuario,
+        licencia,
+        vencimientoLicencia || null,
+        vencimientoCarnet || null,
+        poliza || null,
+        vencimientoSeguro || null,
+        numeroMotor || null,
+        numeroChassis || null,
+        patente,
+        marca || null,
+        modelo || null,
+        anio || null,
+        tipoVehiculo || null,
+      ],
+    );
+
+    const id_conductor = result.insertId;
+
+    // 2️⃣ Cambiar rol del usuario a CONDUCTOR (id_rol = 3)
+    await connection.execute(
+      `UPDATE usuarios SET id_rol = 3 WHERE id_usuario = ?`,
+      [id_usuario],
+    );
+
+    // 3️⃣ Crear validación inicial (PENDIENTE = 1)
+    await connection.execute(
+      `
+      INSERT INTO validacion_conductor
+      (id_usuario, fecha_validacion, id_estado_validacion)
+      VALUES (?, CURDATE(), 1)
+      `,
+      [id_usuario],
+    );
+
+    await connection.commit();
+
+    return res.json({
+      status: "OK",
+      message: "Chofer creado correctamente",
+      id_conductor,
+    });
+  } catch (error) {
+    if (connection) await connection.rollback();
+    console.error("❌ Error en crearChofer:", error);
+
+    return res.status(500).json({
+      message: "Error al crear chofer: " + error.message,
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
 };

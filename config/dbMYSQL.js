@@ -1,6 +1,6 @@
-const mysql = require("mysql2/promise");
+import mysql from "mysql2/promise";
 
-const conectarBDMySql = async () => {
+export const conectarBDMySql = async () => {
   try {
     const connection = await mysql.createConnection({
       host: process.env.HOST_TAXI,
@@ -17,4 +17,4 @@ const conectarBDMySql = async () => {
   }
 };
 
-module.exports = { conectarBDMySql };
+export default conectarBDMySql;

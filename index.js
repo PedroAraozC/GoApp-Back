@@ -1,21 +1,25 @@
 // index.js
-const express = require("express");
-const http = require("http");
-const dotenv = require("dotenv");
-const moment = require("moment-timezone");
-const cors = require("cors");
-const path = require("path");
+import express from "express";
+import http from "http";
+import dotenv from "dotenv";
+import moment from "moment-timezone";
+import cors from "cors";
+import path from "path";
 
-// Rutas
-const conductorRoutes = require("./routes/conductorRoutes");
-const usuarioRoutes = require("./routes/usuarioRoutes");
-const generoRoutes = require("./routes/generoRoutes");
-const rolesRoutes = require("./routes/rolesRoutes");
-const viajesRoutes = require("./routes/viajesRoutes");
-const chatRoutes = require("./routes/chatRoutes");
+import conductorRoutes from "./routes/conductorRoutes.js";
+import usuarioRoutes from "./routes/usuarioRoutes.js";
+import generoRoutes from "./routes/generoRoutes.js";
+import rolesRoutes from "./routes/rolesRoutes.js";
+import viajesRoutes from "./routes/viajesRoutes.js";
+import chatRoutes from "./routes/chatRoutes.js";
+
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Socket
-const { setupSocket } = require("./socket"); // 👈 Importamos socket.js
+import setupSocket from "./socket.js"; // 👈 Importamos socket.js
 
 dotenv.config();
 
