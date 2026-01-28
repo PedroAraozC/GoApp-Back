@@ -166,7 +166,7 @@ const crearUsuario = async (req, res) => {
   let connection;
 
   try {
-    let {
+    const {
       nombre_usuario,
       apellido_usuario,
       dni,
@@ -179,13 +179,29 @@ const crearUsuario = async (req, res) => {
     } = req.body;
 
     connection = await conectarBDMySql();
-    console.log(req.body, "creando usuario");
+    console.log(req.body, "creando usuario", email_usuario, dni);
+
+    const dniNumero = Number(dni);
+    console.log({
+      dniOriginal: dni,
+      dniNumero: Number(dni),
+      tipo: typeof dni,
+    });
+
     const [existe] = await connection.execute(
       "SELECT * FROM usuarios WHERE email_usuario = ?",
       [email_usuario],
     );
-    if (existe.length > 0)
+    const [existeDni] = await connection.execute(
+      "SELECT * FROM usuarios WHERE dni = ?",
+      [dniNumero],
+    );
+    console.log(existeDni, "dni", existe, "gmail");
+    if (existeDni.length > 0) {
+      return res.status(400).json({ message: "El DNI ya está registrado." });
+    } else if (existe.length > 0) {
       return res.status(400).json({ message: "El email ya está registrado." });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
