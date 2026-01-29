@@ -576,3 +576,107 @@ export const validarConductor = async (req, res) => {
     if (connection) await connection.end();
   }
 };
+
+
+export const obtenerDetalleConductor = async (req, res) => {
+  const { id_usuario } = req.params;
+  let connection;
+
+  try {
+    connection = await conectarBDMySql();
+
+    // 1️⃣ Datos base del usuario
+    const [usuarios] = await connection.execute(
+      `
+      SELECT
+        u.id_usuario,
+        u.nombre_usuario,
+        u.apellido_usuario,
+        u.dni,
+        u.email_usuario,
+        u.telefono_usuario
+      FROM usuarios u
+      WHERE u.id_usuario = ?
+      `,
+      [id_usuario]
+    );
+
+    if (!usuarios.length) {
+      return res.status(404).json({
+        message: "Usuario no encontrado",
+      });
+    }
+
+    // 2️⃣ Datos del conductor (si existen)
+    const [conductores] = await connection.execute(
+      `
+      SELECT
+        c.id_conductor,
+        c.licencia,
+        c.vencimiento_licencia,
+        c.vencimiento_carnet,
+        c.poliza_seguro,
+        c.vencimiento_seguro,
+        c.nro_motor,
+        c.nro_chasis,
+        c.matricula,
+        c.marca_vehiculo,
+        c.modelo_vehiculo,
+        c.año_vehiculo,
+        c.id_tipo_vehiculo
+      FROM conductores c
+      WHERE c.id_usuario = ?
+      `,
+      [id_usuario]
+    );
+
+    if (!conductores.length) {
+      // 👈 usuario sin conductor todavía
+      return res.json({ result: null });
+    }
+
+    const conductor = conductores[0];
+
+    // 3️⃣ Estado de validación (si existe)
+    const [validacion] = await connection.execute(
+      `
+      SELECT
+        id_estado_validacion,
+        observaciones
+      FROM validacion_conductor
+      WHERE id_usuario = ?
+      `,
+      [id_usuario]
+    );
+
+    // 4️⃣ Imágenes del conductor (si existen)
+    const [imagenes] = await connection.execute(
+      `
+      SELECT
+        tipo_imagen,
+        ruta_archivo
+      FROM conductor_imagenes
+      WHERE id_conductor = ?
+        AND activa = 1
+      `,
+      [conductor.id_conductor]
+    );
+
+    // 5️⃣ Armar respuesta final
+    return res.json({
+      result: {
+        ...usuarios[0],
+        ...conductor,
+        validacion: validacion[0] || null,
+        imagenes: imagenes || [],
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error obtenerDetalleConductor:", error);
+    return res.status(500).json({
+      message: "Error al obtener detalle del conductor",
+    });
+  } finally {
+    if (connection) await connection.end();
+  }
+};

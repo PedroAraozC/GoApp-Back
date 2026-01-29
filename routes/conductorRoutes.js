@@ -10,6 +10,7 @@ import {
   obtenerConductoresPendientes,
   actualizarChofer,
   validarConductor,
+  obtenerDetalleConductor,
 } from "../controllers/conductorControllers.js";
 
 const router = Router();
@@ -30,5 +31,7 @@ router.post(
 router.get("/:id_conductor/imagenes", getImagenesConductor);
 router.get("/pendientes", obtenerConductoresPendientes);
 router.put("/actualizarChofer/:id_conductor", actualizarChofer);
-router.put("/validar", validarConductor)
+router.put("/validar", validarConductor);
+router.get("/detalle/:id_usuario", obtenerDetalleConductor);
+
 export default router;
