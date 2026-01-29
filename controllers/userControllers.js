@@ -2,6 +2,12 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { conectarBDMySql } from "../config/dbMYSQL.js";
 import { OAuth2Client } from "google-auth-library";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const client = new OAuth2Client(
   "125703789007-thjq5cpij6blij34sv8g404pq6ubnhjv.apps.googleusercontent.com",
@@ -172,87 +178,56 @@ const crearUsuario = async (req, res) => {
       dni,
       fecha_nacimiento,
       id_genero,
-      password,
       telefono_usuario,
       email_usuario,
+      password,
       id_rol,
     } = req.body;
 
     connection = await conectarBDMySql();
-    console.log(req.body, "creando usuario", email_usuario, dni);
 
-    const dniNumero = Number(dni);
-    console.log({
-      dniOriginal: dni,
-      dniNumero: Number(dni),
-      tipo: typeof dni,
-    });
-
-    const [existe] = await connection.execute(
-      "SELECT * FROM usuarios WHERE email_usuario = ?",
+    // validaciones básicas
+    const [existeEmail] = await connection.execute(
+      "SELECT 1 FROM usuarios WHERE email_usuario = ?",
       [email_usuario],
     );
-    const [existeDni] = await connection.execute(
-      "SELECT * FROM usuarios WHERE dni = ?",
-      [dniNumero],
+    const [existeDNI] = await connection.execute(
+      "SELECT 1 FROM usuarios WHERE dni = ?",
+      [dni],
     );
-    console.log(existeDni, "dni", existe, "gmail");
-    if (existeDni.length > 0) {
-      return res.status(400).json({ message: "El DNI ya está registrado." });
-    } else if (existe.length > 0) {
-      return res.status(400).json({ message: "El email ya está registrado." });
-    }
+    if (existeEmail.length)
+      return res.status(400).json({ message: "Email ya registrado" });
+    if (existeDNI.length)
+      return res.status(400).json({ message: "DNI ya registrado" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const [result] = await connection.execute(
-      "INSERT INTO usuarios (nombre_usuario, apellido_usuario, dni, fecha_nacimiento, id_genero, password, telefono_usuario, email_usuario, id_rol) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      `INSERT INTO usuarios
+       (nombre_usuario, apellido_usuario, dni, fecha_nacimiento, id_genero,
+        telefono_usuario, email_usuario, password, id_rol, estado, habilita)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo', 1)`,
       [
         nombre_usuario,
         apellido_usuario,
         dni,
         fecha_nacimiento,
         id_genero,
-        password,
         telefono_usuario,
         email_usuario,
+        hashedPassword,
         id_rol,
       ],
     );
 
-    console.log(
-      nombre_usuario,
-      apellido_usuario,
-      dni,
-      fecha_nacimiento,
-      id_genero,
-      password,
-      telefono_usuario,
-      email_usuario,
-      id_rol,
-    );
-
-    const userId = result.insertId;
-
-    const token = jwt.sign(
-      { id_usuario: userId, email: email_usuario },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" },
-    );
-
     res.json({
-      message: "Usuario creado exitosamente",
-      status: "OK",
-      userId,
-      token,
+      message: "Usuario creado correctamente",
+      id_usuario: result.insertId,
     });
   } catch (error) {
-    console.log(error.message);
-    return res.status(500).json({ message: error.message });
+    res.status(500).json({ message: error.message });
   } finally {
-    if (connection) {
-      await connection.end();
-    }
+    if (connection) await connection.end();
   }
 };
 
@@ -343,6 +318,70 @@ const editarRolUsuario = async (req, res) => {
     res.status(500).json({
       message: "Error al cambiar el rol del usuario: " + error.message,
     });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
+
+// DELETE /usuarios/rollback/:id_usuario
+export const rollbackUsuario = async (req, res) => {
+  const { id_usuario } = req.params;
+  let connection;
+
+  try {
+    connection = await conectarBDMySql();
+    await connection.beginTransaction();
+
+    // eliminar imágenes (si existen)
+    const basePath = path.join(
+      __dirname,
+      "../../uploads/usuarios",
+      String(id_usuario),
+    );
+
+    if (fs.existsSync(basePath)) {
+      fs.rmSync(basePath, { recursive: true, force: true });
+    }
+
+    // eliminar conductor
+    await connection.execute("DELETE FROM conductores WHERE id_usuario = ?", [
+      id_usuario,
+    ]);
+
+    // eliminar usuario
+    await connection.execute("DELETE FROM usuarios WHERE id_usuario = ?", [
+      id_usuario,
+    ]);
+
+    await connection.commit();
+
+    res.json({ message: "Rollback realizado correctamente" });
+  } catch (error) {
+    if (connection) await connection.rollback();
+    res.status(500).json({ message: error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
+// PUT /usuarios/confirmar/:id_usuario
+// controllers/userControllers.js
+export const confirmarUsuario = async (req, res) => {
+  const { id_usuario } = req.params;
+  let connection;
+
+  try {
+    connection = await conectarBDMySql();
+
+    await connection.execute(
+      `UPDATE usuarios 
+       SET estado = 'activo' 
+       WHERE id_usuario = ? AND estado = 'pendiente'`,
+      [id_usuario],
+    );
+
+    res.json({ message: "Usuario confirmado correctamente" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   } finally {
     if (connection) await connection.end();
   }

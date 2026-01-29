@@ -12,6 +12,7 @@ import generoRoutes from "./routes/generoRoutes.js";
 import rolesRoutes from "./routes/rolesRoutes.js";
 import viajesRoutes from "./routes/viajesRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
+import tipoVehiculoRoutes from "./routes/tipoVehiculoRoutes.js";
 
 import { fileURLToPath } from "url";
 
@@ -40,6 +41,7 @@ app.use("/generos", generoRoutes);
 app.use("/viajes", viajesRoutes);
 app.use("/chat", chatRoutes);
 app.use("/uploads", express.static(path.join(__dirname, "imagenes")));
+app.use("/tipoVehiculo", tipoVehiculoRoutes);
 
 // ===============================
 // 🔥 CONFIGURAR SERVIDOR HTTP + SOCKET.IO

@@ -47,7 +47,6 @@ export const obtenerConductores = async (req, res) => {
   }
 };
 
-
 /**
  * PUT /conductores/cambiarEstado
  * Body esperado desde el front:
@@ -310,13 +309,40 @@ export const crearChofer = async (req, res) => {
       tipoVehiculo,
     } = req.body;
 
-    if (!id_usuario || !licencia || !patente) {
+    if (
+      !id_usuario ||
+      !licencia ||
+      !patente ||
+      !tipoVehiculo ||
+      !marca ||
+      !modelo ||
+      !anio ||
+      !numeroMotor ||
+      !numeroChassis ||
+      !poliza ||
+      !vencimientoSeguro ||
+      !vencimientoCarnet ||
+      !vencimientoLicencia
+    ) {
       return res.status(400).json({
         message: "Faltan datos obligatorios para crear el chofer",
       });
     }
 
     connection = await conectarBDMySql();
+
+    // 0️⃣ Verificar si ya existe conductor para este usuario
+    const [existe] = await connection.execute(
+      "SELECT id_conductor FROM conductores WHERE id_usuario = ?",
+      [id_usuario],
+    );
+
+    if (existe.length > 0) {
+      return res.status(400).json({
+        message: "Este usuario ya tiene un registro de conductor",
+      });
+    }
+
     await connection.beginTransaction();
 
     // 1️⃣ Insertar en conductores
@@ -335,7 +361,7 @@ export const crearChofer = async (req, res) => {
         matricula,
         marca_vehiculo,
         modelo_vehiculo,
-        anio_vehiculo,
+        año_vehiculo,
         id_tipo_vehiculo,
         conectado,
         habilita
@@ -391,6 +417,146 @@ export const crearChofer = async (req, res) => {
     return res.status(500).json({
       message: "Error al crear chofer: " + error.message,
     });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
+export const finalizarAltaConductor = async (req, res) => {
+  const { id_usuario, sessionId } = req.body;
+
+  const tempPath = path.join(
+    process.cwd(),
+    "uploads",
+    "temp",
+    `session_${sessionId}`,
+  );
+
+  const finalPath = path.join(
+    process.cwd(),
+    "uploads",
+    "conductores",
+    String(id_usuario),
+  );
+
+  if (!fs.existsSync(tempPath)) {
+    return res.status(400).json({ message: "No hay archivos temporales" });
+  }
+
+  fs.mkdirSync(finalPath, { recursive: true });
+
+  const files = fs.readdirSync(tempPath);
+  for (const file of files) {
+    fs.renameSync(path.join(tempPath, file), path.join(finalPath, file));
+  }
+
+  fs.rmSync(tempPath, { recursive: true, force: true });
+
+  res.json({ message: "Alta finalizada correctamente" });
+};
+
+export const obtenerConductoresPendientes = async (req, res) => {
+  let connection;
+
+  try {
+    connection = await conectarBDMySql();
+
+    const [rows] = await connection.execute(`
+      SELECT 
+        u.id_usuario,
+        u.nombre_usuario,
+        u.apellido_usuario,
+        u.dni,
+        u.email_usuario,
+        u.telefono_usuario,
+        u.fecha_carga
+      FROM usuarios u
+      LEFT JOIN conductores c 
+        ON c.id_usuario = u.id_usuario
+      WHERE u.id_rol = 3 
+        AND c.id_conductor IS NULL
+        AND u.habilita = 1
+    `);
+
+    res.json({ result: rows });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
+
+export const actualizarChofer = async (req, res) => {
+  const { id_conductor } = req.params;
+  const data = req.body;
+  let connection;
+
+  try {
+    connection = await conectarBDMySql();
+
+    await connection.execute(
+      `
+      UPDATE conductores SET
+        licencia = ?,
+        vencimiento_licencia = ?,
+        vencimiento_carnet = ?,
+        poliza_seguro = ?,
+        vencimiento_seguro = ?,
+        nro_motor = ?,
+        nro_chasis = ?,
+        matricula = ?,
+        marca_vehiculo = ?,
+        modelo_vehiculo = ?,
+        año_vehiculo = ?,
+        id_tipo_vehiculo = ?
+      WHERE id_conductor = ?
+      `,
+      [
+        data.licencia,
+        data.vencimientoLicencia,
+        data.vencimientoCarnet,
+        data.poliza,
+        data.vencimientoSeguro,
+        data.numeroMotor,
+        data.numeroChassis,
+        data.patente,
+        data.marca,
+        data.modelo,
+        data.anio,
+        data.tipoVehiculo,
+        id_conductor,
+      ],
+    );
+
+    res.json({ message: "Conductor actualizado" });
+  } catch (e) {
+    res.status(500).json({ message: e.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
+
+export const validarConductor = async (req, res) => {
+  const { id_usuario, id_estado_validacion, observaciones } = req.body;
+  let connection;
+
+  try {
+    connection = await conectarBDMySql();
+
+    await connection.execute(
+      `
+      UPDATE validacion_conductor
+      SET 
+        id_estado_validacion = ?,
+        observaciones = ?,
+        fecha_validacion = NOW()
+      WHERE id_usuario = ?
+      `,
+      [id_estado_validacion, observaciones || null, id_usuario],
+    );
+
+    res.json({ message: "Validación actualizada correctamente" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   } finally {
     if (connection) await connection.end();
   }
