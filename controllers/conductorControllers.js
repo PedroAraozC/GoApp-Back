@@ -77,6 +77,21 @@ export const cambiarEstadoConductor = async (req, res) => {
 
     connection = await conectarBDMySql();
 
+    const [validacion] = await connection.execute(
+      `
+  SELECT id_estado_validacion
+  FROM validacion_conductor
+  WHERE id_usuario = ?
+  `,
+      [id_usuario],
+    );
+
+    if (!validacion.length || validacion[0].id_estado_validacion !== 3) {
+      return res.status(403).json({
+        message: "Conductor no habilitado para operar",
+      });
+    }
+
     const [result] = await connection.execute(
       "UPDATE conductores SET conectado = ? WHERE id_usuario = ?",
       [valorConectado, id_usuario],
