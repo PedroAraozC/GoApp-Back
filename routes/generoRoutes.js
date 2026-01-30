@@ -1,11 +1,11 @@
-const { Router } = require("express");
-const {
+import { Router } from "express";
+import {
   obtenerGenero,
   altaGenero,
   editaGenero,
   eliminaGenero,
   obtenerGeneroAdmin,
-} = require("../controllers/generoControllers");
+} from "../controllers/generoControllers.js";
 
 const router = Router();
 
@@ -15,4 +15,4 @@ router.post("/altaGenero", altaGenero);
 router.put("/editaGenero", editaGenero);
 router.put("/eliminaGenero", eliminaGenero);
 
-module.exports = router;
+export default router;

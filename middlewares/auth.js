@@ -1,7 +1,7 @@
-const jwt = require("jsonwebtoken"); // No instalado por el momento
+import jwt from"jsonwebtoken"; // No instalado por el momento
 
 // Middleware de autenticación para proteger rutas
-const auth = async (req, res, next) => {
+export const auth = async (req, res, next) => {
   try {
     // 1. Obtener el token del header 'Authorization'
     const token = req.header("Authorization");
@@ -20,4 +20,3 @@ const auth = async (req, res, next) => {
   }
 };
 
-module.exports = auth;

@@ -1,6 +1,6 @@
 import { conectarBDMySql } from "../config/dbMYSQL.js";
 
-const emitir = (req, evento, data) => {
+export const emitir = (req, evento, data) => {
   const io = req.app.get("io");
   if (io) io.emit(evento, data);
 };
@@ -153,11 +153,4 @@ export const eliminaGenero = async (req, res) => {
   } finally {
     if (connection) await connection.end();
   }
-};
-
-export default {
-  obtenerGenero,
-  altaGenero,
-  editaGenero,
-  eliminaGenero,
 };

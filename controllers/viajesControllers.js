@@ -1,8 +1,8 @@
 // controllers/viajesControllers.js
-const { conectarBDMySql } = require("../config/dbMYSQL");
+import { conectarBDMySql } from"../config/dbMYSQL.js";
 
 // Helper para emitir eventos por Socket.IO (con room opcional)
-const emitir = (req, evento, data, opciones = {}) => {
+export const emitir = (req, evento, data, opciones = {}) => {
   const io = req.app.get("io");
   if (!io) return;
 
@@ -29,7 +29,7 @@ const emitir = (req, evento, data, opciones = {}) => {
  */
 
 /** POST /viajes/iniciarViaje */
-const iniciarViaje = async (req, res) => {
+export const iniciarViaje = async (req, res) => {
   let connection;
   try {
     const {
@@ -172,7 +172,7 @@ const iniciarViaje = async (req, res) => {
 };
 
 /** PUT /viajes/:id/aceptar (asignarConductor) */
-const asignarConductor = async (req, res) => {
+export const asignarConductor = async (req, res) => {
   let connection;
   try {
     const { id } = req.params; // este id es id_viajes
@@ -256,7 +256,7 @@ const asignarConductor = async (req, res) => {
 };
 
 /** PUT /viajes/:id/rechazar - Rechazar viaje por parte del conductor */
-const rechazarViaje = async (req, res) => {
+export const rechazarViaje = async (req, res) => {
   let connection;
   try {
     const { id } = req.params; // id_viajes
@@ -307,7 +307,7 @@ const rechazarViaje = async (req, res) => {
 };
 
 /** PUT /viajes/:id/actualizarUbicacion - Actualizar ubicación en tiempo real */
-const actualizarUbicacion = async (req, res) => {
+export const actualizarUbicacion = async (req, res) => {
   let connection;
   try {
     const { id } = req.params; // id_viajes
@@ -372,7 +372,7 @@ const actualizarUbicacion = async (req, res) => {
 };
 
 /** PUT /viajes/:id/llegarEncuentro - Cuando el conductor llega al punto de encuentro */
-const llegarEncuentro = async (req, res) => {
+export const llegarEncuentro = async (req, res) => {
   let connection;
   try {
     const { id } = req.params; // id_viajes
@@ -446,7 +446,7 @@ const llegarEncuentro = async (req, res) => {
 };
 
 /** PUT /viajes/:id/comenzar - Comenzar el viaje (solo cuando el conductor llegó al encuentro) */
-const comenzarViaje = async (req, res) => {
+export const comenzarViaje = async (req, res) => {
   let connection;
   try {
     const { id } = req.params; // id_viajes
@@ -517,7 +517,7 @@ const comenzarViaje = async (req, res) => {
 };
 
 /** PUT /viajes/:id/finalizar - Finalizar el viaje */
-const finalizarViaje = async (req, res) => {
+export const finalizarViaje = async (req, res) => {
   let connection;
   try {
     const { id } = req.params; // id_viajes
@@ -616,7 +616,7 @@ const finalizarViaje = async (req, res) => {
 };
 
 /** PUT /viajes/:id/cancelar - Cancelar viaje (por pasajero o conductor) */
-const cancelarViaje = async (req, res) => {
+export const cancelarViaje = async (req, res) => {
   let connection;
   try {
     const { id } = req.params; // id_viajes
@@ -782,13 +782,3 @@ const cancelarViaje = async (req, res) => {
   }
 };
 
-module.exports = {
-  iniciarViaje,
-  asignarConductor,
-  rechazarViaje,
-  actualizarUbicacion,
-  llegarEncuentro,
-  comenzarViaje,
-  finalizarViaje,
-  cancelarViaje,
-};

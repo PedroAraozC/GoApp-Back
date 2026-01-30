@@ -1,6 +1,6 @@
 // routes/viajesRoutes.js
-const { Router } = require("express");
-const {
+import{ Router } from"express";
+import {
   iniciarViaje,
   asignarConductor,
   rechazarViaje,
@@ -9,7 +9,7 @@ const {
   comenzarViaje,
   finalizarViaje,
   cancelarViaje,
-} = require("../controllers/viajesControllers");
+} from "../controllers/viajesControllers.js";
 
 const router = Router();
 
@@ -35,4 +35,4 @@ router.put("/:id/finalizar", finalizarViaje);
 // Cancelar viaje (pasajero o conductor)
 router.put("/:id/cancelar", cancelarViaje);
 
-module.exports = router;
+export default router;

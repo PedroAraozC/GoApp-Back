@@ -1,6 +1,6 @@
-const { conectarBDMySql } = require("../config/dbMYSQL");
+import { conectarBDMySql } from "../config/dbMYSQL.js";
 
-const getMessages = async (req, res) => {
+export const getMessages = async (req, res) => {
     let connection;
     try {
         const { idViaje } = req.params;
@@ -20,7 +20,7 @@ const getMessages = async (req, res) => {
     }
 };
 
-const guardarMensaje = async (idViaje, idEmisor, mensaje) => {
+export const guardarMensaje = async (idViaje, idEmisor, mensaje) => {
     let connection;
     try {
         connection = await conectarBDMySql();
@@ -40,7 +40,3 @@ const guardarMensaje = async (idViaje, idEmisor, mensaje) => {
     }
 };
 
-module.exports = {
-    getMessages,
-    guardarMensaje
-};
