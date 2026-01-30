@@ -394,5 +394,6 @@ export {
   actualizarUsuario,
   eliminarUsuario,
   login,
+  editarRolUsuario,
   google_login,
 };

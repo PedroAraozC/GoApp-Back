@@ -227,11 +227,12 @@ export const obtenerCarnetConductor = async (req, res) => {
   }
 };
 
+
 export const subirImagenConductor = async (req, res) => {
   let connection;
 
   try {
-    const { id_conductor, tipo_imagen } = req.body;
+    const { id_conductor, tipo_imagen } = req.query;
     const file = req.file;
 
     if (!file) {
@@ -242,6 +243,15 @@ export const subirImagenConductor = async (req, res) => {
 
     const rutaRelativa = file.path.replace(process.cwd(), "");
 
+    // 🔄 Marcar como inactiva cualquier imagen anterior del mismo tipo
+    await connection.execute(
+      `UPDATE conductor_imagenes
+       SET activa = 0
+       WHERE id_conductor = ? AND tipo_imagen = ? AND activa = 1`,
+      [id_conductor, tipo_imagen]
+    );
+
+    // ✅ Insertar la nueva imagen
     await connection.execute(
       `INSERT INTO conductor_imagenes
        (id_conductor, tipo_imagen, nombre_archivo, ruta_archivo, mime_type, tamaño_bytes)
@@ -577,7 +587,6 @@ export const validarConductor = async (req, res) => {
   }
 };
 
-
 export const obtenerDetalleConductor = async (req, res) => {
   const { id_usuario } = req.params;
   let connection;
@@ -598,7 +607,7 @@ export const obtenerDetalleConductor = async (req, res) => {
       FROM usuarios u
       WHERE u.id_usuario = ?
       `,
-      [id_usuario]
+      [id_usuario],
     );
 
     if (!usuarios.length) {
@@ -627,7 +636,7 @@ export const obtenerDetalleConductor = async (req, res) => {
       FROM conductores c
       WHERE c.id_usuario = ?
       `,
-      [id_usuario]
+      [id_usuario],
     );
 
     if (!conductores.length) {
@@ -646,7 +655,7 @@ export const obtenerDetalleConductor = async (req, res) => {
       FROM validacion_conductor
       WHERE id_usuario = ?
       `,
-      [id_usuario]
+      [id_usuario],
     );
 
     // 4️⃣ Imágenes del conductor (si existen)
@@ -659,7 +668,7 @@ export const obtenerDetalleConductor = async (req, res) => {
       WHERE id_conductor = ?
         AND activa = 1
       `,
-      [conductor.id_conductor]
+      [conductor.id_conductor],
     );
 
     // 5️⃣ Armar respuesta final

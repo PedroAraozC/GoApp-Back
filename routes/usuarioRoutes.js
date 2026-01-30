@@ -9,11 +9,13 @@ const {
   google_login,
   rollbackUsuario,
   confirmarUsuario,
+  editarRolUsuario
 } = require("../controllers/userControllers");
 
 const router = Router();
 
 router.get("/obtenerUsuarios", obtenerUsuarios);
+router.put("/editarRolUsuario", editarRolUsuario);
 router.get("/obtenerUsuarioId/:id", obtenerUsuarioId);
 router.post("/crearUsuario", crearUsuario);
 router.put("/actualizarUsuario/:id", actualizarUsuario);

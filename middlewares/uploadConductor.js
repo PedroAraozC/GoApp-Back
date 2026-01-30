@@ -4,7 +4,7 @@ import fs from "fs";
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const { id_conductor } = req.body;
+    const { id_conductor } = req.query;
 
     if (!id_conductor) {
       return cb(new Error("id_conductor es obligatorio"));
@@ -12,9 +12,9 @@ const storage = multer.diskStorage({
 
     const basePath = path.join(
       process.cwd(),
-      "imagenes",
+      "../","imagenes",
       "conductores",
-      String(id_conductor)
+      String(id_conductor),
     );
 
     fs.mkdirSync(basePath, { recursive: true });
@@ -22,21 +22,31 @@ const storage = multer.diskStorage({
   },
 
   filename: (req, file, cb) => {
-    const timestamp = Date.now();
+    const { id_conductor, tipo_imagen } = req.query;
     const ext = path.extname(file.originalname);
-    const tipo = req.body.tipo_imagen;
+    const timestamp = Date.now();
 
-    const filename = `${tipo}_${req.body.id_conductor}_${timestamp}${ext}`;
-    cb(null, filename);
+    cb(null, `${tipo_imagen}_${id_conductor}_${timestamp}${ext}`);
   },
 });
 
 const fileFilter = (req, file, cb) => {
-  if (!file.mimetype.startsWith("image/")) {
-    cb(new Error("Solo se permiten imágenes"), false);
-  } else {
-    cb(null, true);
+  const tiposPermitidos = [
+    "image/jpeg",
+    "image/png",
+    "image/jpg",
+    "image/webp",
+    "application/pdf",
+  ];
+
+  if (!tiposPermitidos.includes(file.mimetype)) {
+    return cb(
+      new Error("Solo se permiten imágenes (JPG, PNG, WEBP) o archivos PDF"),
+      false,
+    );
   }
+
+  cb(null, true);
 };
 
 export const uploadConductorImage = multer({
