@@ -9,12 +9,17 @@ import {
   comenzarViaje,
   finalizarViaje,
   cancelarViaje,
+  getViajeActivo,
 } from "../controllers/viajesControllers.js";
 
 const router = Router();
 
 // Iniciar un nuevo viaje
 router.post("/iniciarViaje", iniciarViaje);
+
+
+// ✅ Obtener el viaje activo de un usuario (pasajero o conductor)
+router.get("/activo/:tipo/:id_usuario", getViajeActivo);
 
 // Aceptar o rechazar viaje (conductor)
 router.put("/:id/aceptar", asignarConductor);

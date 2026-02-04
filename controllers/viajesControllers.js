@@ -172,88 +172,92 @@ export const iniciarViaje = async (req, res) => {
 };
 
 /** PUT /viajes/:id/aceptar (asignarConductor) */
+/** PUT /viajes/:id/aceptar (asignarConductor) */
 export const asignarConductor = async (req, res) => {
   let connection;
   try {
-    const { id } = req.params; // este id es id_viajes
+    const { id } = req.params; // id_viajes
     const { id_conductor } = req.body;
 
     if (!id_conductor) {
-      return res
-        .status(400)
-        .json({ message: "id_conductor es requerido" });
+      return res.status(400).json({ message: "id_conductor es requerido" });
     }
 
     connection = await conectarBDMySql();
 
-    // Verificar que el viaje esté en estado "Buscando conductor" (1)
-    const [viajeAntes] = await connection.execute(
-      "SELECT * FROM viajes WHERE id_viajes = ?",
-      [id]
-    );
-
-    if (!viajeAntes || viajeAntes.length === 0) {
-      return res.status(404).json({ message: "Viaje no encontrado" });
-    }
-
-    const viaje = viajeAntes[0];
-    if (viaje.id_estado !== 1 && viaje.estado !== 1) {
-      return res.status(400).json({
-        message: "El viaje no está en estado 'Buscando conductor'",
-      });
-    }
-
-    // Actualizar el viaje: asignar conductor y cambiar estado a 2 (Asignado)
-    await connection.execute(
-      "UPDATE viajes SET id_conductor = ?, id_estado = 2 WHERE id_viajes = ?",
+    // ✅ UPDATE ATÓMICO: solo asigna si sigue libre y en estado 1
+    const [update] = await connection.execute(
+      `UPDATE viajes
+       SET id_conductor = ?, id_estado = 3
+       WHERE id_viajes = ?
+         AND id_estado = 1
+         AND (id_conductor IS NULL OR id_conductor = 0)`,
       [id_conductor, id]
     );
 
-    // Cambiar automáticamente a estado 3 (En camino al encuentro)
-    await connection.execute(
-      "UPDATE viajes SET id_estado = 3 WHERE id_viajes = ?",
-      [id]
-    );
+    // Si no actualizó filas => ya lo tomó otro / ya no está disponible
+    if (!update || update.affectedRows === 0) {
+      // Traemos el viaje para saber a quién quedó asignado (si aplica)
+      const [rows] = await connection.execute(
+        "SELECT id_conductor, id_pasajero, id_estado FROM viajes WHERE id_viajes = ?",
+        [id]
+      );
 
-    // Traer el viaje actualizado
-    const [rows] = await connection.execute(
+      const v = rows?.[0];
+
+      // 🔔 Aviso SOLO a este conductor (no a todos)
+      emitir(req, "viaje_ya_tomado", {
+        id_viajes: Number(id),
+        id_conductor_ganador: v?.id_conductor ?? null,
+        id_estado: v?.id_estado ?? null,
+      }, { room: `conductor_${id_conductor}` });
+
+      return res.status(409).json({
+        ok: false,
+        code: "TAKEN",
+        message: "Otro conductor ya aceptó este viaje.",
+      });
+    }
+
+    // ✅ OK: asignado a este conductor
+    const [rows2] = await connection.execute(
       "SELECT * FROM viajes WHERE id_viajes = ?",
       [id]
     );
 
-    const v = rows[0];
+    const vFinal = rows2?.[0];
 
-    // Notificar al pasajero que el conductor aceptó
-    emitir(req, "viaje_asignado", v, {
-      room: `pasajero_${v.id_pasajero}`,
+    // Notificar al pasajero (ahora sí confirmado)
+    emitir(req, "viaje_asignado", vFinal, {
+      room: `pasajero_${vFinal.id_pasajero}`,
     });
 
-    // Notificar al conductor
-    emitir(req, "viaje_aceptado", v, {
+    // Notificar al conductor ganador
+    emitir(req, "viaje_aceptado", vFinal, {
       room: `conductor_${id_conductor}`,
     });
 
-    // Notificar a todos los conductores que este viaje ya fue tomado
-    emitir(
-      req,
-      "viaje_tomado",
-      { id_viajes: id },
-      { room: "conductores" }
-    );
+    // Notificar a otros conductores que ya fue tomado (incluye ganador)
+    // 👇 Recomendación: mandar también el ganador para que el frontend NO cierre al ganador
+    emitir(req, "viaje_tomado", {
+      id_viajes: Number(id),
+      id_conductor_ganador: Number(id_conductor),
+    }, { room: "conductores" });
 
-    res.json({
-      result: v,
+    return res.json({
+      ok: true,
+      result: vFinal,
       message: "Conductor asignado. Viaje en camino al encuentro.",
     });
+
   } catch (error) {
     console.error("❌ asignarConductor:", error);
-    res
-      .status(500)
-      .json({ message: "Error al asignar conductor: " + error.message });
+    return res.status(500).json({ message: "Error al asignar conductor: " + error.message });
   } finally {
     if (connection) await connection.end();
   }
 };
+
 
 /** PUT /viajes/:id/rechazar - Rechazar viaje por parte del conductor */
 export const rechazarViaje = async (req, res) => {
@@ -483,7 +487,7 @@ export const comenzarViaje = async (req, res) => {
 
     // Cambiar estado a 5 (En curso) y registrar fecha de inicio
     await connection.execute(
-      "UPDATE viajes SET id_estado = 5, fecha_inicio = NOW() WHERE id_viajes = ?",
+      "UPDATE viajes SET id_estado = 5, hora_inicio = NOW() WHERE id_viajes = ?",
       [id]
     );
 
@@ -523,10 +527,10 @@ export const finalizarViaje = async (req, res) => {
     const { id } = req.params; // id_viajes
     const {
       id_conductor,
-      precio_final = null,
-      distancia_km = null,
-      duracion_min = null,
+      valor = null,
     } = req.body;
+
+    const valorFinal = (valor === undefined) ? null : valor;
 
     if (!id_conductor) {
       return res
@@ -558,16 +562,17 @@ export const finalizarViaje = async (req, res) => {
     }
 
     // Actualizar el viaje: estado 6 (Finalizado) y datos finales
-    await connection.execute(
-      `UPDATE viajes
-       SET id_estado = 6,
-           fecha_fin = NOW(),
-           precio_final = COALESCE(?, precio_final),
-           distancia_km = COALESCE(?, distancia_km),
-           duracion_min = COALESCE(?, duracion_min)
-       WHERE id_viajes = ?`,
-      [precio_final, distancia_km, duracion_min, id]
-    );
+   
+await connection.execute(
+  `
+  UPDATE viajes
+  SET id_estado = 4,
+      hora_fin = NOW(),
+      valor = COALESCE(?, valor)
+  WHERE id_viajes = ?
+  `,
+  [valorFinal, id]
+);
 
     // Actualizar el conductor a disponible
     await connection.execute(
@@ -669,8 +674,8 @@ export const cancelarViaje = async (req, res) => {
     // 2) Actualizar el estado a 7 (Cancelado)
     const [updateResult] = await connection.execute(
       `UPDATE viajes
-       SET id_estado = 7,
-           fecha_fin = NOW() 
+       SET id_estado = 3,
+           hora_fin = NOW() 
        WHERE id_viajes = ?`,
       [id]
     );
@@ -782,3 +787,69 @@ export const cancelarViaje = async (req, res) => {
   }
 };
 
+/** GET /viajes/activo/:tipo/:id_usuario
+ * tipo: "pasajero" | "conductor"
+ * Devuelve el último viaje activo del usuario (si existe)
+ */
+export const getViajeActivo = async (req, res) => {
+  let connection;
+  try {
+    const { tipo, id_usuario } = req.params;
+
+    const idUsuario = Number(id_usuario);
+    if (!idUsuario || Number.isNaN(idUsuario)) {
+      return res.status(400).json({ ok: false, message: "id_usuario inválido" });
+    }
+
+    if (tipo !== "pasajero" && tipo !== "conductor") {
+      return res
+        .status(400)
+        .json({ ok: false, message: "tipo debe ser 'pasajero' o 'conductor'" });
+    }
+
+    connection = await conectarBDMySql();
+
+    // Estados "activos" = aún no finalizado / cancelado
+    const estadosActivos = [1, 2, 3, 4, 5];
+
+    // Query según tipo
+    let sql = "";
+    let params = [];
+
+    if (tipo === "pasajero") {
+      sql = `
+        SELECT *
+        FROM viajes
+        WHERE id_pasajero = ?
+          AND id_estado IN (${estadosActivos.map(() => "?").join(",")})
+        ORDER BY id_viajes DESC
+        LIMIT 1
+      `;
+      params = [idUsuario, ...estadosActivos];
+    } else {
+      // conductor
+      sql = `
+        SELECT *
+        FROM viajes
+        WHERE id_conductor = ?
+          AND id_estado IN (${estadosActivos.map(() => "?").join(",")})
+        ORDER BY id_viajes DESC
+        LIMIT 1
+      `;
+      params = [idUsuario, ...estadosActivos];
+    }
+
+    const [rows] = await connection.execute(sql, params);
+
+    if (!rows || rows.length === 0) {
+      return res.json({ ok: true, data: null });
+    }
+
+    return res.json({ ok: true, data: rows[0] });
+  } catch (error) {
+    console.error("❌ getViajeActivo:", error);
+    return res.status(500).json({ ok: false, message: error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
