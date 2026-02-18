@@ -38,6 +38,60 @@ const ESTADOS = {
 
 const getEstado = (v) => Number(v?.id_estado ?? v?.estado ?? v?.id_estado_viajes ?? 0);
 
+const numOrNull = (x) => (x == null ? null : Number(x));
+const strOrEmpty = (x) => (x == null ? "" : String(x));
+
+const normalizarViajeSocket = (v, fallback = {}) => {
+  // fallback puede traer origen_lat/origen_lng/direcciones cuando v es incompleto
+  const latDesde = v?.lat_desde ?? fallback.origen_lat ?? fallback.lat_desde;
+  const lonDesde = v?.lon_desde ?? fallback.origen_lng ?? fallback.lon_desde;
+  const latHasta = v?.lat_hasta ?? fallback.destino_lat ?? fallback.lat_hasta;
+  const lonHasta = v?.lon_hasta ?? fallback.destino_lng ?? fallback.lon_hasta;
+
+  const direccionDesde = v?.direccion_desde ?? fallback.direccion_origen ?? "";
+  const direccionHasta = v?.direccion_hasta ?? fallback.direccion_destino ?? "";
+
+  const modoCobro = (v?.modo_cobro ?? "PACTADO").toString().toUpperCase();
+
+  // precio fijo: preferimos precio_pactado, y precio_final debe estar congelado en PACTADO
+  const precioPactado = numOrNull(v?.precio_pactado);
+  const precioFinal = numOrNull(v?.precio_final);
+  const precioEstimado = v?.precio_estimado == null ? null : Number(v?.precio_estimado);
+
+  return {
+    ...v,
+
+    // ✅ claves nuevas
+    modo_cobro: modoCobro,
+    precio_pactado: precioPactado,
+    precio_final: precioFinal,
+    precio_estimado: precioEstimado,
+
+    // ✅ claves estándar (nuevas)
+    id_viajes: numOrNull(v?.id_viajes),
+    id_pasajero: numOrNull(v?.id_pasajero),
+    id_conductor: v?.id_conductor == null ? null : Number(v?.id_conductor),
+
+    direccion_desde: strOrEmpty(direccionDesde),
+    direccion_hasta: strOrEmpty(direccionHasta),
+
+    lat_desde: latDesde == null ? null : Number(latDesde),
+    lon_desde: lonDesde == null ? null : Number(lonDesde),
+    lat_hasta: latHasta == null ? null : Number(latHasta),
+    lon_hasta: lonHasta == null ? null : Number(lonHasta),
+
+    // ✅ compat vieja (Flutter viejo/otros listeners)
+    latDesde: latDesde == null ? null : Number(latDesde),
+    lonDesde: lonDesde == null ? null : Number(lonDesde),
+    latHasta: latHasta == null ? null : Number(latHasta),
+    lonHasta: lonHasta == null ? null : Number(lonHasta),
+    direccionDesde: strOrEmpty(direccionDesde),
+    direccionHasta: strOrEmpty(direccionHasta),
+  };
+};
+
+
+
 /** POST /viajes/iniciarViaje */
 export const iniciarViaje = async (req, res) => {
   let connection;
@@ -50,7 +104,7 @@ export const iniciarViaje = async (req, res) => {
       destino_lng = null,
       direccion_origen = null,
       direccion_destino = null,
-      precio_estimado = null,
+      precio_estimado = null, // lo seguimos recibiendo igual
     } = req.body;
 
     if (!id_usuario || origen_lat == null || origen_lng == null) {
@@ -79,10 +133,12 @@ export const iniciarViaje = async (req, res) => {
     const tarifa = tarRows[0];
     const id_tarifa = tarifa.id_tarifa;
 
+    // ✅ Normalizar precios
+    const precioPactado = Number(precio_estimado ?? 0);
+    const modoCobro = "PACTADO";
+
     // ✅ 1) Insertar viaje (estado BUSCANDO)
-    // - precio_estimado va a su columna correcta
-    // - precio_final queda NULL hasta finalizar
-    // - id_tarifa se guarda para trazabilidad
+    // 🔥 Ahora guardamos: modo_cobro + precio_pactado + precio_final congelado
     const [result] = await connection.execute(
       `INSERT INTO viajes
        (id_pasajero,
@@ -91,9 +147,11 @@ export const iniciarViaje = async (req, res) => {
         direccion_hasta, lat_hasta, lon_hasta,
         id_estado,
         id_tarifa,
+        modo_cobro,
+        precio_pactado,
         precio_estimado,
         precio_final)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         id_usuario,
         null, // conductor todavía no asignado
@@ -105,8 +163,10 @@ export const iniciarViaje = async (req, res) => {
         destino_lng,
         ESTADOS.BUSCANDO, // 5
         id_tarifa,
-        precio_estimado, // ✅ estimado (cliente)
-        null,            // ✅ final se calcula al finalizar
+        modoCobro,        // ✅ PACTADO
+        precioPactado,    // ✅ precio_pactado
+        String(precioPactado), // ⚠️ tu columna precio_estimado es varchar(20), lo guardamos como string
+        precioPactado,    // ✅ precio_final congelado desde el inicio
       ]
     );
 
@@ -126,6 +186,11 @@ export const iniciarViaje = async (req, res) => {
 
     const v = rows[0];
 
+    // ✅ Seguridad extra por si algo vino null
+    const precioPactadoSeguro = Number(v.precio_pactado ?? precioPactado ?? 0);
+    const precioFinalSeguro =
+      v.precio_final == null ? precioPactadoSeguro : Number(v.precio_final);
+
     // 3) Normalizar payload socket (manteniendo compatibilidad)
     const payloadSocket = {
       id_viajes: v.id_viajes ?? id_viajes,
@@ -143,14 +208,19 @@ export const iniciarViaje = async (req, res) => {
       hora_inicio: v.hora_inicio ?? v.fecha_inicio ?? null,
       hora_fin: v.hora_fin ?? v.fecha_fin ?? null,
 
-      // ✅ ahora el valor que interesa al crear es el estimado
-      precio_estimado: Number(v.precio_estimado ?? precio_estimado ?? 0),
-      precio_final: v.precio_final == null ? null : Number(v.precio_final),
+      // ✅ NUEVO: lo que te interesa para precio fijo
+      modo_cobro: v.modo_cobro ?? modoCobro,
+      precio_pactado: precioPactadoSeguro,
+      precio_final: precioFinalSeguro,
+
+      // ✅ COMPAT: seguimos enviando "precio_estimado"
+      // (si el pasajero todavía muestra "estimado", ahora puede usar precio_pactado)
+      precio_estimado: Number(v.precio_estimado ?? precioPactadoSeguro ?? 0),
 
       id_estado: v.id_estado ?? ESTADOS.BUSCANDO,
       id_tarifa: v.id_tarifa ?? id_tarifa,
 
-      // Compat
+      // Compat keys viejas
       latDesde: Number(v.lat_desde ?? origen_lat),
       lonDesde: Number(v.lon_desde ?? origen_lng),
       latHasta: v.lat_hasta == null ? null : Number(v.lat_hasta),
@@ -171,7 +241,7 @@ export const iniciarViaje = async (req, res) => {
       emitir(req, "viaje_creado", payloadSocket, { room: "conductores" });
     }
 
-    // 5) Notificar al pasajero que su viaje está buscando conductor
+    // 5) Notificar al pasajero
     emitir(req, "viaje_buscando_conductor", payloadSocket, {
       room: `pasajero_${id_usuario}`,
     });
@@ -180,7 +250,7 @@ export const iniciarViaje = async (req, res) => {
     return res.status(201).json({
       ok: true,
       result: v,
-      tarifa_vigente: tarifa, // útil para debug
+      tarifa_vigente: tarifa,
       message: "Viaje iniciado en estado 'Buscando'.",
     });
   } catch (error) {
@@ -192,6 +262,8 @@ export const iniciarViaje = async (req, res) => {
     if (connection) await connection.end();
   }
 };
+
+
 
 /** PUT /viajes/:id/aceptar (asignarConductor) */
 export const asignarConductor = async (req, res) => {
@@ -250,15 +322,17 @@ export const asignarConductor = async (req, res) => {
 
     const vFinal = rows2?.[0];
 
-    // Notificar al pasajero
-    emitir(req, "viaje_asignado", vFinal, {
-      room: `pasajero_${vFinal.id_pasajero}`,
-    });
+   const payload = normalizarViajeSocket(vFinal);
 
-    // Notificar al conductor ganador
-    emitir(req, "viaje_aceptado", vFinal, {
-      room: `conductor_${id_conductor}`,
-    });
+// Notificar al pasajero
+emitir(req, "viaje_asignado", payload, {
+  room: `pasajero_${vFinal.id_pasajero}`,
+});
+
+// Notificar al conductor ganador
+emitir(req, "viaje_aceptado", payload, {
+  room: `conductor_${id_conductor}`,
+});
 
     // Notificar a todos que ya fue tomado
     emitir(
@@ -536,13 +610,9 @@ export const llegarEncuentro = async (req, res) => {
 
     const v = viajeActualizado[0];
 
-    emitir(req, "conductor_llego_encuentro", v, {
-      room: `pasajero_${v.id_pasajero}`,
-    });
-
-    emitir(req, "llegaste_encuentro", v, {
-      room: `conductor_${id_conductor}`,
-    });
+    const payload = normalizarViajeSocket(v);
+emitir(req, "conductor_llego_encuentro", payload, { room: `pasajero_${v.id_pasajero}` });
+emitir(req, "llegaste_encuentro", payload, { room: `conductor_${id_conductor}` });
 
     return res.json({
       result: v,
@@ -604,8 +674,10 @@ export const comenzarViaje = async (req, res) => {
 
     const v = viajeActualizado[0];
 
-    emitir(req, "viaje_en_curso", v, { room: `pasajero_${v.id_pasajero}` });
-    emitir(req, "viaje_comenzado", v, { room: `conductor_${id_conductor}` });
+    const payload = normalizarViajeSocket(v);
+emitir(req, "viaje_en_curso", payload, { room: `pasajero_${v.id_pasajero}` });
+emitir(req, "viaje_comenzado", payload, { room: `conductor_${id_conductor}` });
+
 
     return res.json({ result: v, message: "Viaje en curso" });
   } catch (error) {
@@ -652,15 +724,39 @@ export const finalizarViaje = async (req, res) => {
       });
     }
 
+    const modoCobro = (viaje.modo_cobro ?? "PACTADO").toString().toUpperCase();
+
+    // ✅ Regla: si es PACTADO, el precio final queda fijo = precio_pactado
+    // ✅ Si es TAXIMETRO, precio_final es obligatorio y lo setea el taxímetro
+    let precioFinalASetear = null;
+
+    if (modoCobro === "PACTADO") {
+      // si no hay precio_pactado por algún motivo, caemos a lo que ya tenga precio_final/estimado
+      const pactado = Number(viaje.precio_pactado ?? 0);
+      const existente = Number(viaje.precio_final ?? 0);
+
+      // Preferimos precio_pactado. Si está 0/null, mantenemos el existente.
+      precioFinalASetear = pactado > 0 ? pactado : (existente > 0 ? existente : 0);
+    } else {
+      // TAXIMETRO
+      const pf = Number(precio_final);
+      if (!Number.isFinite(pf) || pf <= 0) {
+        return res.status(400).json({
+          message: "precio_final es requerido y debe ser > 0 para viajes TAXIMETRO",
+        });
+      }
+      precioFinalASetear = pf;
+    }
+
     await connection.execute(
       `
       UPDATE viajes
       SET id_estado = ?,
           hora_fin = NOW(),
-          precio_final = COALESCE(?, precio_final)
+          precio_final = ?
       WHERE id_viajes = ?
       `,
-      [ESTADOS.FINALIZADO, precio_final, id]
+      [ESTADOS.FINALIZADO, precioFinalASetear, id]
     );
 
     // conductor disponible
@@ -676,8 +772,36 @@ export const finalizarViaje = async (req, res) => {
 
     const v = viajeActualizado[0];
 
-    emitir(req, "viaje_finalizado", v, { room: `pasajero_${v.id_pasajero}` });
-    emitir(req, "viaje_completado", v, { room: `conductor_${id_conductor}` });
+    // ✅ Payload normalizado (sin romper compatibilidad)
+    const payload = {
+      ...v,
+
+      // nuevos “claros”
+      modo_cobro: v.modo_cobro ?? modoCobro,
+      precio_pactado: v.precio_pactado == null ? null : Number(v.precio_pactado),
+      precio_final: v.precio_final == null ? null : Number(v.precio_final),
+      precio_estimado: v.precio_estimado == null ? null : Number(v.precio_estimado),
+
+      // compat vieja (si tus pantallas escuchan estas keys)
+      id_viajes: v.id_viajes,
+      id_pasajero: v.id_pasajero,
+      direccion_desde: v.direccion_desde,
+      direccion_hasta: v.direccion_hasta,
+      lat_desde: v.lat_desde == null ? null : Number(v.lat_desde),
+      lon_desde: v.lon_desde == null ? null : Number(v.lon_desde),
+      lat_hasta: v.lat_hasta == null ? null : Number(v.lat_hasta),
+      lon_hasta: v.lon_hasta == null ? null : Number(v.lon_hasta),
+
+      latDesde: v.lat_desde == null ? null : Number(v.lat_desde),
+      lonDesde: v.lon_desde == null ? null : Number(v.lon_desde),
+      latHasta: v.lat_hasta == null ? null : Number(v.lat_hasta),
+      lonHasta: v.lon_hasta == null ? null : Number(v.lon_hasta),
+      direccionDesde: v.direccion_desde ?? "",
+      direccionHasta: v.direccion_hasta ?? "",
+    };
+
+    emitir(req, "viaje_finalizado", payload, { room: `pasajero_${v.id_pasajero}` });
+    emitir(req, "viaje_completado", payload, { room: `conductor_${id_conductor}` });
 
     emitir(
       req,
@@ -699,6 +823,7 @@ export const finalizarViaje = async (req, res) => {
     if (connection) await connection.end();
   }
 };
+
 
 /** PUT /viajes/:id/cancelar - Cancelar viaje (pasajero o conductor) */
 export const cancelarViaje = async (req, res) => {
@@ -754,25 +879,25 @@ export const cancelarViaje = async (req, res) => {
         [id]
       );
       const v = rowsDespues[0];
-
+      const payload = normalizarViajeSocket(v);
       // si estaba buscando (5) => avisar conductores para quitarlo
       if (estadoAnterior === ESTADOS.BUSCANDO) {
         emitir(req, "viaje_cancelado_busqueda", { id_viajes: Number(id) }, { room: "conductores" });
       } else {
         // si ya había conductor, avisarle y liberarlo
         if (v.id_conductor) {
-          emitir(req, "viaje_cancelado_pasajero", v, { room: `conductor_${v.id_conductor}` });
+          emitir(req, "viaje_cancelado_pasajero", payload, { room: `conductor_${v.id_conductor}` });
 
           await connection.execute(
             "UPDATE conductores SET conectado = 1 WHERE id_usuario = ?",
-            [v.id_conductor]
+            [payload.id_conductor]
           );
-          emitir(req, "conductor_disponible", { id_conductor: v.id_conductor, conectado: true }, { room: "conductores" });
+          emitir(req, "conductor_disponible", { id_conductor: payload.id_conductor, conectado: true }, { room: "conductores" });
         }
       }
 
       // avisar pasajero
-      emitir(req, "viaje_cancelado", v, { room: `pasajero_${v.id_pasajero}` });
+      emitir(req, "viaje_cancelado", payload, { room: `pasajero_${v.id_pasajero}` });
 
       return res.json({ ok: true, message: "Viaje cancelado por pasajero", viaje: v });
     }
@@ -799,12 +924,12 @@ export const cancelarViaje = async (req, res) => {
         const vActualizado = viajeActualizado[0];
 
         // avisar pasajero
-        emitir(req, "viaje_buscando_conductor", vActualizado, {
+        emitir(req, "viaje_buscando_conductor", normalizarViajeSocket(vActualizado), {
           room: `pasajero_${vActualizado.id_pasajero}`,
         });
 
         // avisar a conductores
-        emitir(req, "viaje_creado", vActualizado, { room: "conductores" });
+        emitir(req, "viaje_creado", normalizarViajeSocket(vActualizado), { room: "conductores" });
 
         // liberar conductor
         await connection.execute(
@@ -913,7 +1038,7 @@ export const getViajeActivo = async (req, res) => {
       return res.json({ ok: true, data: null });
     }
 
-    return res.json({ ok: true, data: rows[0] });
+    return res.json({ ok: true, data: normalizarViajeSocket(rows[0]) });
   } catch (error) {
     console.error("❌ getViajeActivo:", error);
     return res.status(500).json({ ok: false, message: error.message });
@@ -950,6 +1075,9 @@ export const getHistorialViajesUsuario = async (req, res) => {
 
         v.hora_inicio,
         v.hora_fin,
+        
+        v.modo_cobro,
+        v.precio_pactado,
 
         v.id_estado,
         CASE v.id_estado
