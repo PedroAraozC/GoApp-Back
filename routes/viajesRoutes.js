@@ -11,6 +11,8 @@ import {
   finalizarViaje,
   cancelarViaje,
   getViajeActivo,
+  getHistorialViajesUsuario,
+  getHistorialViajesConductor,
 } from "../controllers/viajesControllers.js";
 
 const router = Router();
@@ -20,7 +22,10 @@ router.post("/iniciarViaje", iniciarViaje);
 
 // ✅ Obtener el viaje activo de un usuario (pasajero o conductor)
 router.get("/activo/:tipo/:id_usuario", getViajeActivo);
+router.get("/historial/:id_usuario", getHistorialViajesUsuario);
 
+// ✅ Historial del conductor (con info del pasajero)
+router.get("/historialConductor/:id_usuario", getHistorialViajesConductor);
 // Aceptar o rechazar viaje (conductor)
 router.put("/:id/aceptar", asignarConductor);
 router.put("/:id/rechazar", rechazarViaje);

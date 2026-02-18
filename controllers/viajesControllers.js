@@ -921,3 +921,157 @@ export const getViajeActivo = async (req, res) => {
     if (connection) await connection.end();
   }
 };
+
+/** GET /viajes/historial/:id_usuario  (Historial pasajero) */
+export const getHistorialViajesUsuario = async (req, res) => {
+  let connection;
+  try {
+    const idUsuario = Number(req.params.id_usuario);
+
+    if (!Number.isFinite(idUsuario) || idUsuario <= 0) {
+      return res.status(400).json({ ok: false, message: "id_usuario inválido" });
+    }
+
+    connection = await conectarBDMySql();
+
+    const sql = `
+      SELECT
+        v.id_viajes,
+        v.id_pasajero,
+        v.id_conductor,
+
+        v.direccion_desde  AS direccion_origen,
+        v.lat_desde        AS origen_lat,
+        v.lon_desde        AS origen_lng,
+
+        v.direccion_hasta  AS direccion_destino,
+        v.lat_hasta        AS destino_lat,
+        v.lon_hasta        AS destino_lng,
+
+        v.hora_inicio,
+        v.hora_fin,
+
+        v.id_estado,
+        CASE v.id_estado
+          WHEN 1 THEN 'asignado'
+          WHEN 2 THEN 'en curso'
+          WHEN 3 THEN 'cancelado'
+          WHEN 4 THEN 'finalizado'
+          WHEN 5 THEN 'buscando'
+          WHEN 6 THEN 'en camino al encuentro'
+          WHEN 7 THEN 'esperando pasajero'
+          ELSE 'desconocido'
+        END AS estado,
+
+        v.id_tarifa,
+        v.precio_estimado,
+        v.precio_final,
+
+        -- ✅ Datos conductor (si existe)
+        u.nombre_usuario    AS conductor_nombre,
+        u.apellido_usuario  AS conductor_apellido,
+        u.telefono_usuario  AS telefono_conductor,
+        u.email_usuario     AS email_conductor,
+        u.foto_perfil       AS foto_perfil_conductor,
+
+        c.id_conductor,
+        c.matricula         AS patente,
+        c.marca_vehiculo,
+        c.modelo_vehiculo,
+        c.foto_conductor    AS foto_conductor,
+        c.foto_vehiculo     AS foto_vehiculo
+
+      FROM viajes v
+      LEFT JOIN usuarios u
+        ON u.id_usuario = v.id_conductor
+      LEFT JOIN conductores c
+        ON c.id_usuario = v.id_conductor
+
+      WHERE v.id_pasajero = ?
+      ORDER BY v.id_viajes DESC
+      LIMIT 200
+    `;
+
+    const [rows] = await connection.execute(sql, [idUsuario]);
+
+    return res.json({ ok: true, data: rows || [] });
+  } catch (error) {
+    console.error("❌ getHistorialViajesUsuario:", error);
+    return res.status(500).json({ ok: false, message: error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
+
+/** GET /viajes/historialConductor/:id_usuario  (Historial conductor) */
+export const getHistorialViajesConductor = async (req, res) => {
+  let connection;
+  try {
+    const idUsuario = Number(req.params.id_usuario);
+
+    if (!Number.isFinite(idUsuario) || idUsuario <= 0) {
+      return res.status(400).json({ ok: false, message: "id_usuario inválido" });
+    }
+
+    connection = await conectarBDMySql();
+
+    const sql = `
+      SELECT
+        v.id_viajes,
+        v.id_pasajero,
+        v.id_conductor,
+
+        v.direccion_desde  AS direccion_origen,
+        v.lat_desde        AS origen_lat,
+        v.lon_desde        AS origen_lng,
+
+        v.direccion_hasta  AS direccion_destino,
+        v.lat_hasta        AS destino_lat,
+        v.lon_hasta        AS destino_lng,
+
+        v.hora_inicio,
+        v.hora_fin,
+
+        v.id_estado,
+        CASE v.id_estado
+          WHEN 1 THEN 'asignado'
+          WHEN 2 THEN 'en curso'
+          WHEN 3 THEN 'cancelado'
+          WHEN 4 THEN 'finalizado'
+          WHEN 5 THEN 'buscando'
+          WHEN 6 THEN 'en camino al encuentro'
+          WHEN 7 THEN 'esperando pasajero'
+          ELSE 'desconocido'
+        END AS estado,
+
+        v.id_tarifa,
+        v.precio_estimado,
+        v.precio_final,
+
+        -- ✅ Datos del pasajero (usuarios)
+        u.nombre_usuario    AS pasajero_nombre,
+        u.apellido_usuario  AS pasajero_apellido,
+        u.telefono_usuario  AS pasajero_telefono,
+        u.email_usuario     AS pasajero_email,
+        u.foto_perfil       AS pasajero_foto
+
+      FROM viajes v
+      LEFT JOIN usuarios u
+        ON u.id_usuario = v.id_pasajero
+
+      WHERE v.id_conductor = ?
+      ORDER BY v.id_viajes DESC
+      LIMIT 200
+    `;
+
+    const [rows] = await connection.execute(sql, [idUsuario]);
+
+    return res.json({ ok: true, data: rows || [] });
+  } catch (error) {
+    console.error("❌ getHistorialViajesConductor:", error);
+    return res.status(500).json({ ok: false, message: error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
+
