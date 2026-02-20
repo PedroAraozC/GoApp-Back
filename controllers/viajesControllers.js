@@ -675,8 +675,30 @@ export const comenzarViaje = async (req, res) => {
     const v = viajeActualizado[0];
 
     const payload = normalizarViajeSocket(v);
-emitir(req, "viaje_en_curso", payload, { room: `pasajero_${v.id_pasajero}` });
-emitir(req, "viaje_comenzado", payload, { room: `conductor_${id_conductor}` });
+
+// ✅ agregar compat extra
+const payloadEnCurso = {
+  ...payload,
+  id_viaje: Number(v.id_viajes ?? id),   // <-- clave que muchos front usan
+  id_viajes: Number(v.id_viajes ?? id),
+  id_estado: Number(v.id_estado ?? ESTADOS.EN_CURSO),
+};
+
+const roomPasajero = `pasajero_${v.id_pasajero}`;
+const roomViaje = `viaje_${Number(v.id_viajes ?? id)}`;
+
+console.log("▶️ [comenzarViaje] emitiendo viaje_en_curso a:", roomPasajero, roomViaje);
+
+// ✅ emitir a los 2 (pasajero + room del viaje)
+emitir(req, "viaje_en_curso", payloadEnCurso, { room: roomPasajero });
+emitir(req, "viaje_en_curso", payloadEnCurso, { room: roomViaje });
+
+// ✅ aliases por si alguna pantalla escucha otros nombres
+emitir(req, "viaje_iniciado", payloadEnCurso, { room: roomPasajero });
+emitir(req, "viaje_iniciado", payloadEnCurso, { room: roomViaje });
+
+// conductor
+emitir(req, "viaje_comenzado", payloadEnCurso, { room: `conductor_${id_conductor}` });
 
 
     return res.json({ result: v, message: "Viaje en curso" });
