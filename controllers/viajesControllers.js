@@ -684,21 +684,18 @@ const payloadEnCurso = {
   id_estado: Number(v.id_estado ?? ESTADOS.EN_CURSO),
 };
 
-const roomPasajero = `pasajero_${v.id_pasajero}`;
 const roomViaje = `viaje_${Number(v.id_viajes ?? id)}`;
+const roomPasajero = `pasajero_${v.id_pasajero}`;
 
 console.log("▶️ [comenzarViaje] emitiendo viaje_en_curso a:", roomPasajero, roomViaje);
+emitir(req, "viaje_finalizado", payload, { room: roomPasajero });
+emitir(req, "viaje_finalizado", payload, { room: roomViaje });
 
-// ✅ emitir a los 2 (pasajero + room del viaje)
-emitir(req, "viaje_en_curso", payloadEnCurso, { room: roomPasajero });
-emitir(req, "viaje_en_curso", payloadEnCurso, { room: roomViaje });
+// alias por compat (opcional)
+emitir(req, "viaje_completado_pasajero", payload, { room: roomPasajero });
+emitir(req, "viaje_completado_pasajero", payload, { room: roomViaje });
 
-// ✅ aliases por si alguna pantalla escucha otros nombres
-emitir(req, "viaje_iniciado", payloadEnCurso, { room: roomPasajero });
-emitir(req, "viaje_iniciado", payloadEnCurso, { room: roomViaje });
-
-// conductor
-emitir(req, "viaje_comenzado", payloadEnCurso, { room: `conductor_${id_conductor}` });
+emitir(req, "viaje_completado", payload, { room: `conductor_${id_conductor}` });
 
 
     return res.json({ result: v, message: "Viaje en curso" });
