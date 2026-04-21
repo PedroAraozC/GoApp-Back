@@ -29,8 +29,6 @@ router.get("/historialConductor/:id_usuario", getHistorialViajesConductor);
 // Aceptar o rechazar viaje (conductor)
 router.put("/:id/aceptar", asignarConductor);
 router.put("/:id/rechazar", rechazarViaje);
-
-// Actualizar ubicación en tiempo real
 router.put("/:id/actualizarUbicacion", actualizarUbicacion);
 
 // ✅ Conductor en camino al punto de encuentro (estado 6)
@@ -44,8 +42,6 @@ router.put("/:id/comenzar", comenzarViaje);
 
 // Finalizar el viaje (estado 4 - Finalizado)
 router.put("/:id/finalizar", finalizarViaje);
-
-// Cancelar viaje (pasajero o conductor)
 router.put("/:id/cancelar", cancelarViaje);
 
 export default router;

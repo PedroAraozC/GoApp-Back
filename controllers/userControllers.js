@@ -386,4 +386,3 @@ export const confirmarUsuario = async (req, res) => {
     if (connection) await connection.end();
   }
 };
-

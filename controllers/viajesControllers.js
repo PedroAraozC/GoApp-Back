@@ -90,8 +90,54 @@ const normalizarViajeSocket = (v, fallback = {}) => {
   };
 };
 
+const getPerfilPublicoPasajero = async (connection, idPasajero) => {
+  const pasajeroId = Number(idPasajero);
 
+  // 1️⃣ Viajes completados
+  const [countRows] = await connection.execute(
+    `SELECT COUNT(*) AS viajes_totales
+     FROM viajes
+     WHERE id_pasajero = ? AND id_estado = 4`,
+    [pasajeroId]
+  );
 
+  const viajesTotales = Number(countRows?.[0]?.viajes_totales ?? 0);
+
+  // 2️⃣ Nombre y apellido (tu tabla real)
+  const [userRows] = await connection.execute(
+    `SELECT nombre_usuario, apellido_usuario
+     FROM usuarios
+     WHERE id_usuario = ?
+     LIMIT 1`,
+    [pasajeroId]
+  );
+
+  const u = userRows?.[0] ?? {};
+
+  // 3️⃣ Rating promedio (si todavía no tenés tabla, queda 0)
+  let rating = 0;
+
+  try {
+    const [ratingRows] = await connection.execute(
+      `SELECT AVG(calificacion) AS rating
+       FROM calificaciones
+       WHERE id_pasajero = ?`,
+      [pasajeroId]
+    );
+
+    rating = Number(ratingRows?.[0]?.rating ?? 0);
+  } catch (e) {
+    // Si todavía no existe la tabla calificaciones
+    rating = 0;
+  }
+
+  return {
+    nombre: String(u.nombre_usuario ?? ""),
+    apellido: String(u.apellido_usuario ?? ""),
+    rating: Number(rating.toFixed(1)),
+    viajes_totales: viajesTotales,
+  };
+};
 /** POST /viajes/iniciarViaje */
 export const iniciarViaje = async (req, res) => {
   let connection;
@@ -165,7 +211,7 @@ export const iniciarViaje = async (req, res) => {
         id_tarifa,
         modoCobro,        // ✅ PACTADO
         precioPactado,    // ✅ precio_pactado
-        String(precioPactado), // ⚠️ tu columna precio_estimado es varchar(20), lo guardamos como string
+        precioPactado, // ⚠️ tu columna precio_estimado es varchar(20), lo guardamos como string
         precioPactado,    // ✅ precio_final congelado desde el inicio
       ]
     );
@@ -185,6 +231,9 @@ export const iniciarViaje = async (req, res) => {
     }
 
     const v = rows[0];
+
+    // ✅ Traer info pública del pasajero
+const pasajeroInfo = await getPerfilPublicoPasajero(connection, v.id_pasajero ?? id_usuario);
 
     // ✅ Seguridad extra por si algo vino null
     const precioPactadoSeguro = Number(v.precio_pactado ?? precioPactado ?? 0);
@@ -227,6 +276,15 @@ export const iniciarViaje = async (req, res) => {
       lonHasta: v.lon_hasta == null ? null : Number(v.lon_hasta),
       direccionDesde: v.direccion_desde ?? direccion_origen ?? "",
       direccionHasta: v.direccion_hasta ?? direccion_destino ?? "",
+
+            // ✅ Info pasajero para el conductor
+      pasajero: pasajeroInfo,
+
+      // ✅ Compat plano (por si algún front lo espera sin "pasajero")
+      nombre: pasajeroInfo.nombre,
+      apellido: pasajeroInfo.apellido,
+      rating: pasajeroInfo.rating,
+      viajes_totales: pasajeroInfo.viajes_totales,
     };
 
     // 4) Emitir SOLO a room conductores
@@ -320,9 +378,19 @@ export const asignarConductor = async (req, res) => {
       [id]
     );
 
-    const vFinal = rows2?.[0];
+   const vFinal = rows2?.[0];
 
-   const payload = normalizarViajeSocket(vFinal);
+// ✅ Info pública del pasajero
+const pasajeroInfo = await getPerfilPublicoPasajero(connection, vFinal.id_pasajero);
+
+const payload = {
+  ...normalizarViajeSocket(vFinal),
+  pasajero: pasajeroInfo,
+  nombre: pasajeroInfo.nombre,
+  apellido: pasajeroInfo.apellido,
+  rating: pasajeroInfo.rating,
+  viajes_totales: pasajeroInfo.viajes_totales,
+};
 
 // Notificar al pasajero
 emitir(req, "viaje_asignado", payload, {
@@ -688,9 +756,9 @@ const roomViaje = `viaje_${Number(v.id_viajes ?? id)}`;
 const roomPasajero = `pasajero_${v.id_pasajero}`;
 
 console.log("▶️ [comenzarViaje] emitiendo viaje_en_curso a:", roomPasajero, roomViaje);
-emitir(req, "viaje_finalizado", payload, { room: roomPasajero });
-emitir(req, "viaje_finalizado", payload, { room: roomViaje });
-
+emitir(req, "viaje_en_curso", payloadEnCurso, { room: roomPasajero });
+emitir(req, "viaje_en_curso", payloadEnCurso, { room: roomViaje });
+emitir(req, "viaje_en_curso", payloadEnCurso, { room: `conductor_${id_conductor}` });
 // alias por compat (opcional)
 emitir(req, "viaje_completado_pasajero", payload, { room: roomPasajero });
 emitir(req, "viaje_completado_pasajero", payload, { room: roomViaje });
@@ -1222,3 +1290,66 @@ export const getHistorialViajesConductor = async (req, res) => {
   }
 };
 
+/** GET /viajes/:id/detalle  (detalle + conductor/pasajero) */
+export const getDetalleViaje = async (req, res) => {
+  let connection;
+  try {
+    const idViaje = Number(req.params.id);
+    if (!Number.isFinite(idViaje) || idViaje <= 0) {
+      return res.status(400).json({ ok: false, message: "id inválido" });
+    }
+
+    connection = await conectarBDMySql();
+
+    // Trae viaje + nombre/apellido del pasajero y conductor (si existe)
+    const [rows] = await connection.execute(
+      `
+      SELECT
+        v.*,
+
+        up.nombre_usuario   AS pasajero_nombre,
+        up.apellido_usuario AS pasajero_apellido,
+
+        uc.nombre_usuario   AS conductor_nombre,
+        uc.apellido_usuario AS conductor_apellido
+
+      FROM viajes v
+      LEFT JOIN usuarios up ON up.id_usuario = v.id_pasajero
+      LEFT JOIN usuarios uc ON uc.id_usuario = v.id_conductor
+      WHERE v.id_viajes = ?
+      LIMIT 1
+      `,
+      [idViaje]
+    );
+
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ ok: false, message: "Viaje no encontrado" });
+    }
+
+    const r = rows[0];
+
+    return res.json({
+      ok: true,
+      data: {
+        ...normalizarViajeSocket(r),
+        pasajero: {
+          id_usuario: r.id_pasajero,
+          nombre: r.pasajero_nombre ?? "",
+          apellido: r.pasajero_apellido ?? "",
+        },
+        conductor: r.id_conductor
+          ? {
+              id_usuario: r.id_conductor,
+              nombre: r.conductor_nombre ?? "",
+              apellido: r.conductor_apellido ?? "",
+            }
+          : null,
+      },
+    });
+  } catch (e) {
+    console.error("❌ getDetalleViaje:", e);
+    return res.status(500).json({ ok: false, message: e.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
