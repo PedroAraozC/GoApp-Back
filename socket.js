@@ -110,34 +110,6 @@ export default function setupSocket(server, app) {
     });
 
     // ========================================
-    // SEGUIMIENTO EN TIEMPO REAL DE UBICACIÓN
-    // ========================================
-    socket.on("ubicacion_actualizada", (data) => {
-      const { id_viaje, lat, lng, id_usuario, tipo } = data;
-
-      if (!id_viaje || !lat || !lng || !id_usuario || !tipo) {
-        console.log("❌ ubicacion_actualizada datos incompletos");
-        return;
-      }
-
-      const room = `viaje_${id_viaje}`;
-      const payload = {
-        id_viaje,
-        lat: Number(lat),
-        lng: Number(lng),
-        id_usuario,
-        tipo,
-        timestamp: new Date().toISOString(),
-      };
-
-      // Emitir a todos en el room del viaje (pasajero y conductor)
-      io.to(room).emit("ubicacion_en_tiempo_real", payload);
-      console.log(
-        `📍 Ubicación actualizada en viaje ${id_viaje} - ${tipo} ${id_usuario}`,
-      );
-    });
-
-    // ========================================
     // JOIN A ROOM DE CHAT
     // ========================================
     socket.on("join_chat", (data) => {
@@ -216,18 +188,15 @@ socket.on("ubicacion_actualizada", (data) => {
   }
 
   const room = `viaje_${idViaje}`;
-  const payload = {
+
+  io.to(room).emit("ubicacion_en_tiempo_real", {
     id_viaje: Number(idViaje),
     lat: Number(lat),
     lng: Number(lng),
     id_usuario: Number(idUsuario),
     tipo,
     timestamp: new Date().toISOString(),
-  };
-
-  io.to(room).emit("ubicacion_en_tiempo_real", payload);
-  // debug:
-  // console.log(`📍 Ubicación en ${room}`, payload);
+  });
 });
 
 // ================================

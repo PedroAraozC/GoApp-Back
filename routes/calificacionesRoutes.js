@@ -3,6 +3,6 @@ import { crearCalificacion } from "../controllers/calificacionesControllers.js";
 
 const router = Router();
 
-router.post("/calificaciones", crearCalificacion);
+router.post("/", crearCalificacion);
 
 export default router;

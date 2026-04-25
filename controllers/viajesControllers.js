@@ -613,7 +613,7 @@ export const enCaminoAlEncuentro = async (req, res) => {
 
     // ✅ Emitir eventos (si tenés la función emitir)
     // Pasajero
-    // emitir(req, "conductor_en_camino", v, { room: `pasajero_${v.id_pasajero}` });
+    emitir(req, "conductor_en_camino", v, { room: `pasajero_${v.id_pasajero}` });
     // Conductor
     // emitir(req, "vas_al_encuentro", v, { room: `conductor_${conductorId}` });
 
@@ -759,11 +759,8 @@ console.log("▶️ [comenzarViaje] emitiendo viaje_en_curso a:", roomPasajero, 
 emitir(req, "viaje_en_curso", payloadEnCurso, { room: roomPasajero });
 emitir(req, "viaje_en_curso", payloadEnCurso, { room: roomViaje });
 emitir(req, "viaje_en_curso", payloadEnCurso, { room: `conductor_${id_conductor}` });
-// alias por compat (opcional)
-emitir(req, "viaje_completado_pasajero", payload, { room: roomPasajero });
-emitir(req, "viaje_completado_pasajero", payload, { room: roomViaje });
 
-emitir(req, "viaje_completado", payload, { room: `conductor_${id_conductor}` });
+
 
 
     return res.json({ result: v, message: "Viaje en curso" });
