@@ -1,6 +1,6 @@
 import { conectarBDMySql } from "../config/dbMYSQL.js";
 
-const emitir = (req, evento, data) => {
+export const emitir = (req, evento, data) => {
   const io = req.app.get("io");
   if (io) io.emit(evento, data);
 };
@@ -13,7 +13,20 @@ export const obtenerGenero = async (req, res) => {
   let connection;
   try {
     connection = await conectarBDMySql();
-    const [result] = await connection.execute("SELECT * FROM generos");
+    const [result] = await connection.execute("SELECT * FROM generos WHERE habilita = 1");
+    res.json({ result });
+  } catch (error) {
+    console.error("❌ Error al obtener géneros:", error);
+    res.status(500).json({ message: "Error al obtener géneros." });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
+export const obtenerGeneroAdmin = async (req, res) => {
+  let connection;
+  try {
+    connection = await conectarBDMySql();
+    const [result] = await connection.execute("SELECT * FROM generos ");
     res.json({ result });
   } catch (error) {
     console.error("❌ Error al obtener géneros:", error);
@@ -140,11 +153,4 @@ export const eliminaGenero = async (req, res) => {
   } finally {
     if (connection) await connection.end();
   }
-};
-
-export default {
-  obtenerGenero,
-  altaGenero,
-  editaGenero,
-  eliminaGenero,
 };

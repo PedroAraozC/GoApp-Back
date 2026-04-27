@@ -1,5 +1,5 @@
-const { Router } = require("express");
-const {
+import { Router } from"express";
+import{
   obtenerUsuarios,
   obtenerUsuarioId,
   crearUsuario,
@@ -7,16 +7,22 @@ const {
   eliminarUsuario,
   login,
   google_login,
-} = require("../controllers/userControllers");
+  rollbackUsuario,
+  confirmarUsuario,
+  editarRolUsuario
+} from"../controllers/userControllers.js";
 
 const router = Router();
 
 router.get("/obtenerUsuarios", obtenerUsuarios);
+router.put("/editarRolUsuario", editarRolUsuario);
 router.get("/obtenerUsuarioId/:id", obtenerUsuarioId);
 router.post("/crearUsuario", crearUsuario);
 router.put("/actualizarUsuario/:id", actualizarUsuario);
 router.put("/eliminarUsuario/:id", eliminarUsuario);
 router.post("/login", login);
 router.post("/google_login", google_login);
+router.delete("/rollback/:id_usuario", rollbackUsuario);
+router.put("/confirmar/:id_usuario", confirmarUsuario)
 
-module.exports = router;
+export default router;

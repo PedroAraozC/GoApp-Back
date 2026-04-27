@@ -1,10 +1,9 @@
-const { conectarBDMySql } = require("../config/dbMYSQL");
-
+import {conectarBDMySql} from "../config/dbMYSQL.js";
 
 /* C R U D */
 
 /* Create */
-const altaRol = async (req, res) => {
+export const altaRol = async (req, res) => {
   let connection;
   try {
     const { nombre_rol, habilita } = req.body;
@@ -17,7 +16,7 @@ const altaRol = async (req, res) => {
     connection = await conectarBDMySql();
     await connection.execute(
       "INSERT INTO roles (nombre_rol, habilita) VALUES (?, ?)",
-      [nombre_rol, habilita ?? 1]
+      [nombre_rol, habilita ?? 1],
     );
 
     // 🔊 Emitir evento Socket.IO
@@ -40,11 +39,26 @@ const altaRol = async (req, res) => {
 /* ================================
    🔹 READ - GET /roles/obtenerRol
    ================================ */
-const obtenerRol = async (req, res) => {
+export const obtenerRol = async (req, res) => {
   let connection;
   try {
     connection = await conectarBDMySql();
-    const [result] = await connection.execute("SELECT * FROM roles WHERE habilita = 1");
+    const [result] = await connection.execute(
+      "SELECT * FROM roles WHERE habilita = 1",
+    );
+    res.json({ result });
+  } catch (error) {
+    console.error("❌ Error al obtener roles:", error);
+    res.status(500).json({ message: "Error al obtener roles." });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
+export const obtenerRolAdmin = async (req, res) => {
+  let connection;
+  try {
+    connection = await conectarBDMySql();
+    const [result] = await connection.execute("SELECT * FROM roles");
     res.json({ result });
   } catch (error) {
     console.error("❌ Error al obtener roles:", error);
@@ -57,7 +71,7 @@ const obtenerRol = async (req, res) => {
 /* ================================
    🔹 UPDATE - PUT /roles/editaRol
    ================================ */
-const editaRol = async (req, res) => {
+export const editaRol = async (req, res) => {
   let connection;
   try {
     const { id_rol, nombre_rol, habilita } = req.body;
@@ -68,7 +82,7 @@ const editaRol = async (req, res) => {
     connection = await conectarBDMySql();
     await connection.execute(
       "UPDATE roles SET nombre_rol = ?, habilita = ? WHERE id_rol = ?",
-      [nombre_rol, habilita, id_rol]
+      [nombre_rol, habilita, id_rol],
     );
 
     // 🔊 Emitir evento Socket.IO
@@ -95,7 +109,7 @@ const editaRol = async (req, res) => {
 /* ================================
    🔹 DELETE - PUT /roles/eliminarRol
    ================================ */
-const eliminarRol = async (req, res) => {
+export const eliminarRol = async (req, res) => {
   let connection;
   try {
     const { id_rol, nombre_rol } = req.body;
@@ -127,5 +141,3 @@ const eliminarRol = async (req, res) => {
     if (connection) await connection.end();
   }
 };
-
-module.exports = { altaRol, obtenerRol, editaRol, eliminarRol };

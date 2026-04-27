@@ -1,21 +1,21 @@
 // socket.js
-const { Server } = require("socket.io");
-const { guardarMensaje } = require("./controllers/chatController");
+import { Server } from "socket.io";
+import { guardarMensaje } from "./controllers/chatController.js";
 
-exports.setupSocket = (server, app) => {
+export default function setupSocket(server, app) {
   const io = new Server(server, {
     cors: {
       origin: "*",
       methods: ["GET", "POST", "PUT", "DELETE"],
       credentials: true,
     },
-    transports: ['websocket', 'polling'], // Permitir ambos transportes
+    transports: ["websocket", "polling"], // Permitir ambos transportes
     allowEIO3: true, // Compatibilidad con versiones anteriores
     pingTimeout: 60000, // 60 segundos
     pingInterval: 25000, // 25 segundos
   });
-  
-  console.log('🔌 Socket.IO configurado y listo para conexiones');
+
+  console.log("🔌 Socket.IO configurado y listo para conexiones");
 
   // Guardamos io en Express para usarlo en los controladores (viajesControllers, etc.)
   app.set("io", io);
@@ -40,9 +40,12 @@ exports.setupSocket = (server, app) => {
         socket.join("conductores");
         socket.join(`conductor_${id_usuario}`);
         console.log(
-          `🚕 Conductor ${id_usuario} unido a salas "conductores" y "conductor_${id_usuario}"`
+          `🚕 Conductor ${id_usuario} unido a salas "conductores" y "conductor_${id_usuario}"`,
         );
-        console.log(`📌 [Socket] Rooms del conductor ${id_usuario}:`, Array.from(socket.rooms));
+        console.log(
+          `📌 [Socket] Rooms del conductor ${id_usuario}:`,
+          Array.from(socket.rooms),
+        );
       }
 
       // Pasajero → sala "pasajeros" + sala individual
@@ -50,7 +53,7 @@ exports.setupSocket = (server, app) => {
         socket.join("pasajeros");
         socket.join(`pasajero_${id_usuario}`);
         console.log(
-          `🧍 Pasajero ${id_usuario} unido a salas "pasajeros" y "pasajero_${id_usuario}"`
+          `🧍 Pasajero ${id_usuario} unido a salas "pasajeros" y "pasajero_${id_usuario}"`,
         );
       }
 
@@ -67,7 +70,7 @@ exports.setupSocket = (server, app) => {
         socket.leave("conductores");
         socket.leave(`conductor_${id_usuario}`);
         console.log(
-          `🚕 Conductor ${id_usuario} salió de "conductores" y "conductor_${id_usuario}"`
+          `🚕 Conductor ${id_usuario} salió de "conductores" y "conductor_${id_usuario}"`,
         );
       }
 
@@ -75,7 +78,7 @@ exports.setupSocket = (server, app) => {
         socket.leave("pasajeros");
         socket.leave(`pasajero_${id_usuario}`);
         console.log(
-          `🧍 Pasajero ${id_usuario} salió de "pasajeros" y "pasajero_${id_usuario}"`
+          `🧍 Pasajero ${id_usuario} salió de "pasajeros" y "pasajero_${id_usuario}"`,
         );
       }
 
@@ -86,14 +89,16 @@ exports.setupSocket = (server, app) => {
     socket.on("join_viaje", ({ id_viaje, user_id, tipo }) => {
       const room = `viaje_${id_viaje}`;
       socket.join(room);
-      console.log(`📍 Usuario ${user_id} (${tipo}) unido a room ${room} para seguimiento`);
-      
+      console.log(
+        `📍 Usuario ${user_id} (${tipo}) unido a room ${room} para seguimiento`,
+      );
+
       // Notificar a otros usuarios en el viaje
       socket.to(room).emit("usuario_unido_viaje", {
         id_viaje,
         user_id,
         tipo,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     });
 
@@ -102,32 +107,6 @@ exports.setupSocket = (server, app) => {
       const room = `viaje_${id_viaje}`;
       socket.leave(room);
       console.log(`📍 Usuario ${user_id} salió del room ${room}`);
-    });
-
-    // ========================================
-    // SEGUIMIENTO EN TIEMPO REAL DE UBICACIÓN
-    // ========================================
-    socket.on("ubicacion_actualizada", (data) => {
-      const { id_viaje, lat, lng, id_usuario, tipo } = data;
-      
-      if (!id_viaje || !lat || !lng || !id_usuario || !tipo) {
-        console.log("❌ ubicacion_actualizada datos incompletos");
-        return;
-      }
-
-      const room = `viaje_${id_viaje}`;
-      const payload = {
-        id_viaje,
-        lat: Number(lat),
-        lng: Number(lng),
-        id_usuario,
-        tipo,
-        timestamp: new Date().toISOString()
-      };
-
-      // Emitir a todos en el room del viaje (pasajero y conductor)
-      io.to(room).emit("ubicacion_en_tiempo_real", payload);
-      console.log(`📍 Ubicación actualizada en viaje ${id_viaje} - ${tipo} ${id_usuario}`);
     });
 
     // ========================================
@@ -150,7 +129,7 @@ exports.setupSocket = (server, app) => {
       io.to(room).emit("user_joined", {
         idUsuario,
         tipo,
-        mensaje: `${tipo} se unió al chat`
+        mensaje: `${tipo} se unió al chat`,
       });
     });
 
@@ -178,9 +157,8 @@ exports.setupSocket = (server, app) => {
           idViaje,
           idEmisor,
           mensaje,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
-
       } catch (err) {
         console.error("❌ Error guardando mensaje:", err);
       }
@@ -193,7 +171,53 @@ exports.setupSocket = (server, app) => {
       console.log("🔴 Cliente desconectado:", socket.id, "Motivo:", reason);
       // Podrías usar socket.data.id_usuario / tipo si querés hacer limpieza extra
     });
+
+    // ========================================
+// SEGUIMIENTO EN TIEMPO REAL DE UBICACIÓN
+// ========================================
+socket.on("ubicacion_actualizada", (data) => {
+  const idViaje = data?.id_viaje ?? data?.idViaje ?? data?.id_viajes ?? data?.id;
+  const lat = data?.lat;
+  const lng = data?.lng;
+  const idUsuario = data?.id_usuario ?? data?.idUsuario;
+  const tipo = data?.tipo;
+
+  if (idViaje == null || lat == null || lng == null || idUsuario == null || !tipo) {
+    console.log("❌ ubicacion_actualizada datos incompletos", data);
+    return;
+  }
+
+  const room = `viaje_${idViaje}`;
+
+  io.to(room).emit("ubicacion_en_tiempo_real", {
+    id_viaje: Number(idViaje),
+    lat: Number(lat),
+    lng: Number(lng),
+    id_usuario: Number(idUsuario),
+    tipo,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// ================================
+// BOTÓN ANTIPÁNICO 911
+// ================================
+socket.on("panic_911", (data) => {
+  const { id_usuario, lat, lng, ts } = data || {};
+  console.log("🚨 PANIC 911:", { id_usuario, lat, lng, ts });
+
+  io.to("admins").emit("panic_911", {
+    id_usuario,
+    lat: lat != null ? Number(lat) : null,
+    lng: lng != null ? Number(lng) : null,
+    ts: ts || new Date().toISOString(),
+  });
+});
+
+
+
+
   });
 
   return io;
-};
+}
