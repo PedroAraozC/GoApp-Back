@@ -13,7 +13,7 @@ const client = new OAuth2Client(
   "125703789007-thjq5cpij6blij34sv8g404pq6ubnhjv.apps.googleusercontent.com",
 );
 
-const obtenerUsuarios = async (req, res) => {
+export const obtenerUsuarios = async (req, res) => {
   let connection;
   try {
     connection = await conectarBDMySql();
@@ -35,7 +35,7 @@ const obtenerUsuarios = async (req, res) => {
   }
 };
 
-const obtenerUsuarioId = async (req, res) => {
+export const obtenerUsuarioId = async (req, res) => {
   let connection;
   let { id } = req.params;
   try {
@@ -61,7 +61,7 @@ const obtenerUsuarioId = async (req, res) => {
 /* ==========================================
    🔹 Login clásico y Google
    ========================================== */
-const login = async (req, res) => {
+export const login = async (req, res) => {
   let connection;
   let { email, password } = req.body;
   console.log(req.body);
@@ -100,7 +100,7 @@ const login = async (req, res) => {
   }
 };
 
-const google_login = async (req, res) => {
+export const google_login = async (req, res) => {
   const { token } = req.body;
   const io = req.app.get("io");
   let connection;
@@ -168,7 +168,7 @@ const google_login = async (req, res) => {
   }
 };
 
-const crearUsuario = async (req, res) => {
+export const crearUsuario = async (req, res) => {
   let connection;
 
   try {
@@ -231,7 +231,7 @@ const crearUsuario = async (req, res) => {
   }
 };
 
-const actualizarUsuario = async (req, res) => {
+export const actualizarUsuario = async (req, res) => {
   let connection;
 
   try {
@@ -274,7 +274,7 @@ const actualizarUsuario = async (req, res) => {
   }
 };
 
-const eliminarUsuario = async (req, res) => {
+export const eliminarUsuario = async (req, res) => {
   let connection;
 
   try {
@@ -297,7 +297,7 @@ const eliminarUsuario = async (req, res) => {
     }
   }
 };
-const editarRolUsuario = async (req, res) => {
+export const editarRolUsuario = async (req, res) => {
   let connection;
   try {
     const { id_usuario, id_rol } = req.body;
@@ -385,15 +385,4 @@ export const confirmarUsuario = async (req, res) => {
   } finally {
     if (connection) await connection.end();
   }
-};
-
-export {
-  obtenerUsuarios,
-  obtenerUsuarioId,
-  crearUsuario,
-  actualizarUsuario,
-  eliminarUsuario,
-  login,
-  editarRolUsuario,
-  google_login,
 };

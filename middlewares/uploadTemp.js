@@ -2,7 +2,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 
-const storage = multer.diskStorage({
+export const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const { sessionId } = req.body;
 
@@ -28,7 +28,7 @@ const storage = multer.diskStorage({
   },
 });
 
-const fileFilter = (req, file, cb) => {
+export const fileFilter = (req, file, cb) => {
   const allowed = ["image/", "application/pdf"];
   if (allowed.some((t) => file.mimetype.startsWith(t))) {
     cb(null, true);

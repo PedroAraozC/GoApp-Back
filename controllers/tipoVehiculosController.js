@@ -1,4 +1,4 @@
-import conectarBDMySql from "../config/dbMYSQL.js";
+import {conectarBDMySql} from "../config/dbMYSQL.js";
 
 /* C R U D */
 
