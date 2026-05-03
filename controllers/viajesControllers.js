@@ -336,6 +336,21 @@ export const asignarConductor = async (req, res) => {
 
     connection = await conectarBDMySql();
 
+    // ✅ CHECK DEUDA
+    const [deudaRows] = await connection.execute(
+      `SELECT SUM(monto) as total_deuda FROM deuda_conductor WHERE id_conductor = ? AND estado = 'PENDING'`,
+      [id_conductor]
+    );
+    const saldoAdeudado = Number(deudaRows[0]?.total_deuda ?? 0);
+    const limiteSaldo = 150000;
+    
+    if (saldoAdeudado > limiteSaldo) {
+      return res.status(403).json({
+        ok: false,
+        message: `Tenés deuda pendiente de $${saldoAdeudado.toFixed(2)}. No podés aceptar viajes.`,
+      });
+    }
+
     // ✅ UPDATE ATÓMICO: solo asigna si sigue libre y en estado 5 (Buscando)
     const [update] = await connection.execute(
       `UPDATE viajes
@@ -842,6 +857,22 @@ export const finalizarViaje = async (req, res) => {
       `,
       [ESTADOS.FINALIZADO, precioFinalASetear, id]
     );
+
+    // ✅ Registrar comisión en deuda_conductor
+    const comision = precioFinalASetear * 0.20; // 20%
+    if (comision > 0) {
+      // Evitar duplicados (idempotencia)
+      const [checkDeuda] = await connection.execute(
+        "SELECT id_deuda FROM deuda_conductor WHERE id_viaje = ?",
+        [id]
+      );
+      if (checkDeuda.length === 0) {
+        await connection.execute(
+          `INSERT INTO deuda_conductor (id_conductor, id_viaje, monto, estado) VALUES (?, ?, ?, 'PENDING')`,
+          [id_conductor, id, comision]
+        );
+      }
+    }
 
     // conductor disponible
     await connection.execute(
