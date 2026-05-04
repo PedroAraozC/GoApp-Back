@@ -38,6 +38,106 @@ const ESTADOS = {
 
 const getEstado = (v) => Number(v?.id_estado ?? v?.estado ?? v?.id_estado_viajes ?? 0);
 
+const numOrNull = (x) => (x == null ? null : Number(x));
+const strOrEmpty = (x) => (x == null ? "" : String(x));
+
+const normalizarViajeSocket = (v, fallback = {}) => {
+  // fallback puede traer origen_lat/origen_lng/direcciones cuando v es incompleto
+  const latDesde = v?.lat_desde ?? fallback.origen_lat ?? fallback.lat_desde;
+  const lonDesde = v?.lon_desde ?? fallback.origen_lng ?? fallback.lon_desde;
+  const latHasta = v?.lat_hasta ?? fallback.destino_lat ?? fallback.lat_hasta;
+  const lonHasta = v?.lon_hasta ?? fallback.destino_lng ?? fallback.lon_hasta;
+
+  const direccionDesde = v?.direccion_desde ?? fallback.direccion_origen ?? "";
+  const direccionHasta = v?.direccion_hasta ?? fallback.direccion_destino ?? "";
+
+  const modoCobro = (v?.modo_cobro ?? "PACTADO").toString().toUpperCase();
+
+  // precio fijo: preferimos precio_pactado, y precio_final debe estar congelado en PACTADO
+  const precioPactado = numOrNull(v?.precio_pactado);
+  const precioFinal = numOrNull(v?.precio_final);
+  const precioEstimado = v?.precio_estimado == null ? null : Number(v?.precio_estimado);
+
+  return {
+    ...v,
+
+    // ✅ claves nuevas
+    modo_cobro: modoCobro,
+    precio_pactado: precioPactado,
+    precio_final: precioFinal,
+    precio_estimado: precioEstimado,
+
+    // ✅ claves estándar (nuevas)
+    id_viajes: numOrNull(v?.id_viajes),
+    id_pasajero: numOrNull(v?.id_pasajero),
+    id_conductor: v?.id_conductor == null ? null : Number(v?.id_conductor),
+
+    direccion_desde: strOrEmpty(direccionDesde),
+    direccion_hasta: strOrEmpty(direccionHasta),
+
+    lat_desde: latDesde == null ? null : Number(latDesde),
+    lon_desde: lonDesde == null ? null : Number(lonDesde),
+    lat_hasta: latHasta == null ? null : Number(latHasta),
+    lon_hasta: lonHasta == null ? null : Number(lonHasta),
+
+    // ✅ compat vieja (Flutter viejo/otros listeners)
+    latDesde: latDesde == null ? null : Number(latDesde),
+    lonDesde: lonDesde == null ? null : Number(lonDesde),
+    latHasta: latHasta == null ? null : Number(latHasta),
+    lonHasta: lonHasta == null ? null : Number(lonHasta),
+    direccionDesde: strOrEmpty(direccionDesde),
+    direccionHasta: strOrEmpty(direccionHasta),
+  };
+};
+
+const getPerfilPublicoPasajero = async (connection, idPasajero) => {
+  const pasajeroId = Number(idPasajero);
+
+  // 1️⃣ Viajes completados
+  const [countRows] = await connection.execute(
+    `SELECT COUNT(*) AS viajes_totales
+     FROM viajes
+     WHERE id_pasajero = ? AND id_estado = 4`,
+    [pasajeroId]
+  );
+
+  const viajesTotales = Number(countRows?.[0]?.viajes_totales ?? 0);
+
+  // 2️⃣ Nombre y apellido (tu tabla real)
+  const [userRows] = await connection.execute(
+    `SELECT nombre_usuario, apellido_usuario
+     FROM usuarios
+     WHERE id_usuario = ?
+     LIMIT 1`,
+    [pasajeroId]
+  );
+
+  const u = userRows?.[0] ?? {};
+
+  // 3️⃣ Rating promedio (si todavía no tenés tabla, queda 0)
+  let rating = 0;
+
+  try {
+    const [ratingRows] = await connection.execute(
+      `SELECT AVG(calificacion) AS rating
+       FROM calificaciones
+       WHERE id_pasajero = ?`,
+      [pasajeroId]
+    );
+
+    rating = Number(ratingRows?.[0]?.rating ?? 0);
+  } catch (e) {
+    // Si todavía no existe la tabla calificaciones
+    rating = 0;
+  }
+
+  return {
+    nombre: String(u.nombre_usuario ?? ""),
+    apellido: String(u.apellido_usuario ?? ""),
+    rating: Number(rating.toFixed(1)),
+    viajes_totales: viajesTotales,
+  };
+};
 /** POST /viajes/iniciarViaje */
 export const iniciarViaje = async (req, res) => {
   let connection;
@@ -50,7 +150,7 @@ export const iniciarViaje = async (req, res) => {
       destino_lng = null,
       direccion_origen = null,
       direccion_destino = null,
-      precio_estimado = null,
+      precio_estimado = null, // lo seguimos recibiendo igual
     } = req.body;
 
     if (!id_usuario || origen_lat == null || origen_lng == null) {
@@ -79,10 +179,12 @@ export const iniciarViaje = async (req, res) => {
     const tarifa = tarRows[0];
     const id_tarifa = tarifa.id_tarifa;
 
+    // ✅ Normalizar precios
+    const precioPactado = Number(precio_estimado ?? 0);
+    const modoCobro = "PACTADO";
+
     // ✅ 1) Insertar viaje (estado BUSCANDO)
-    // - precio_estimado va a su columna correcta
-    // - precio_final queda NULL hasta finalizar
-    // - id_tarifa se guarda para trazabilidad
+    // 🔥 Ahora guardamos: modo_cobro + precio_pactado + precio_final congelado
     const [result] = await connection.execute(
       `INSERT INTO viajes
        (id_pasajero,
@@ -91,9 +193,11 @@ export const iniciarViaje = async (req, res) => {
         direccion_hasta, lat_hasta, lon_hasta,
         id_estado,
         id_tarifa,
+        modo_cobro,
+        precio_pactado,
         precio_estimado,
         precio_final)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         id_usuario,
         null, // conductor todavía no asignado
@@ -105,8 +209,10 @@ export const iniciarViaje = async (req, res) => {
         destino_lng,
         ESTADOS.BUSCANDO, // 5
         id_tarifa,
-        precio_estimado, // ✅ estimado (cliente)
-        null,            // ✅ final se calcula al finalizar
+        modoCobro,        // ✅ PACTADO
+        precioPactado,    // ✅ precio_pactado
+        precioPactado, // ⚠️ tu columna precio_estimado es varchar(20), lo guardamos como string
+        precioPactado,    // ✅ precio_final congelado desde el inicio
       ]
     );
 
@@ -126,6 +232,14 @@ export const iniciarViaje = async (req, res) => {
 
     const v = rows[0];
 
+    // ✅ Traer info pública del pasajero
+const pasajeroInfo = await getPerfilPublicoPasajero(connection, v.id_pasajero ?? id_usuario);
+
+    // ✅ Seguridad extra por si algo vino null
+    const precioPactadoSeguro = Number(v.precio_pactado ?? precioPactado ?? 0);
+    const precioFinalSeguro =
+      v.precio_final == null ? precioPactadoSeguro : Number(v.precio_final);
+
     // 3) Normalizar payload socket (manteniendo compatibilidad)
     const payloadSocket = {
       id_viajes: v.id_viajes ?? id_viajes,
@@ -143,20 +257,34 @@ export const iniciarViaje = async (req, res) => {
       hora_inicio: v.hora_inicio ?? v.fecha_inicio ?? null,
       hora_fin: v.hora_fin ?? v.fecha_fin ?? null,
 
-      // ✅ ahora el valor que interesa al crear es el estimado
-      precio_estimado: Number(v.precio_estimado ?? precio_estimado ?? 0),
-      precio_final: v.precio_final == null ? null : Number(v.precio_final),
+      // ✅ NUEVO: lo que te interesa para precio fijo
+      modo_cobro: v.modo_cobro ?? modoCobro,
+      precio_pactado: precioPactadoSeguro,
+      precio_final: precioFinalSeguro,
+
+      // ✅ COMPAT: seguimos enviando "precio_estimado"
+      // (si el pasajero todavía muestra "estimado", ahora puede usar precio_pactado)
+      precio_estimado: Number(v.precio_estimado ?? precioPactadoSeguro ?? 0),
 
       id_estado: v.id_estado ?? ESTADOS.BUSCANDO,
       id_tarifa: v.id_tarifa ?? id_tarifa,
 
-      // Compat
+      // Compat keys viejas
       latDesde: Number(v.lat_desde ?? origen_lat),
       lonDesde: Number(v.lon_desde ?? origen_lng),
       latHasta: v.lat_hasta == null ? null : Number(v.lat_hasta),
       lonHasta: v.lon_hasta == null ? null : Number(v.lon_hasta),
       direccionDesde: v.direccion_desde ?? direccion_origen ?? "",
       direccionHasta: v.direccion_hasta ?? direccion_destino ?? "",
+
+            // ✅ Info pasajero para el conductor
+      pasajero: pasajeroInfo,
+
+      // ✅ Compat plano (por si algún front lo espera sin "pasajero")
+      nombre: pasajeroInfo.nombre,
+      apellido: pasajeroInfo.apellido,
+      rating: pasajeroInfo.rating,
+      viajes_totales: pasajeroInfo.viajes_totales,
     };
 
     // 4) Emitir SOLO a room conductores
@@ -171,7 +299,7 @@ export const iniciarViaje = async (req, res) => {
       emitir(req, "viaje_creado", payloadSocket, { room: "conductores" });
     }
 
-    // 5) Notificar al pasajero que su viaje está buscando conductor
+    // 5) Notificar al pasajero
     emitir(req, "viaje_buscando_conductor", payloadSocket, {
       room: `pasajero_${id_usuario}`,
     });
@@ -180,7 +308,7 @@ export const iniciarViaje = async (req, res) => {
     return res.status(201).json({
       ok: true,
       result: v,
-      tarifa_vigente: tarifa, // útil para debug
+      tarifa_vigente: tarifa,
       message: "Viaje iniciado en estado 'Buscando'.",
     });
   } catch (error) {
@@ -192,6 +320,8 @@ export const iniciarViaje = async (req, res) => {
     if (connection) await connection.end();
   }
 };
+
+
 
 /** PUT /viajes/:id/aceptar (asignarConductor) */
 export const asignarConductor = async (req, res) => {
@@ -205,6 +335,21 @@ export const asignarConductor = async (req, res) => {
     }
 
     connection = await conectarBDMySql();
+
+    // ✅ CHECK DEUDA
+    const [deudaRows] = await connection.execute(
+      `SELECT SUM(monto) as total_deuda FROM deuda_conductor WHERE id_conductor = ? AND estado = 'PENDING'`,
+      [id_conductor]
+    );
+    const saldoAdeudado = Number(deudaRows[0]?.total_deuda ?? 0);
+    const limiteSaldo = 150000;
+    
+    if (saldoAdeudado > limiteSaldo) {
+      return res.status(403).json({
+        ok: false,
+        message: `Tenés deuda pendiente de $${saldoAdeudado.toFixed(2)}. No podés aceptar viajes.`,
+      });
+    }
 
     // ✅ UPDATE ATÓMICO: solo asigna si sigue libre y en estado 5 (Buscando)
     const [update] = await connection.execute(
@@ -248,17 +393,29 @@ export const asignarConductor = async (req, res) => {
       [id]
     );
 
-    const vFinal = rows2?.[0];
+   const vFinal = rows2?.[0];
 
-    // Notificar al pasajero
-    emitir(req, "viaje_asignado", vFinal, {
-      room: `pasajero_${vFinal.id_pasajero}`,
-    });
+// ✅ Info pública del pasajero
+const pasajeroInfo = await getPerfilPublicoPasajero(connection, vFinal.id_pasajero);
 
-    // Notificar al conductor ganador
-    emitir(req, "viaje_aceptado", vFinal, {
-      room: `conductor_${id_conductor}`,
-    });
+const payload = {
+  ...normalizarViajeSocket(vFinal),
+  pasajero: pasajeroInfo,
+  nombre: pasajeroInfo.nombre,
+  apellido: pasajeroInfo.apellido,
+  rating: pasajeroInfo.rating,
+  viajes_totales: pasajeroInfo.viajes_totales,
+};
+
+// Notificar al pasajero
+emitir(req, "viaje_asignado", payload, {
+  room: `pasajero_${vFinal.id_pasajero}`,
+});
+
+// Notificar al conductor ganador
+emitir(req, "viaje_aceptado", payload, {
+  room: `conductor_${id_conductor}`,
+});
 
     // Notificar a todos que ya fue tomado
     emitir(
@@ -471,7 +628,7 @@ export const enCaminoAlEncuentro = async (req, res) => {
 
     // ✅ Emitir eventos (si tenés la función emitir)
     // Pasajero
-    // emitir(req, "conductor_en_camino", v, { room: `pasajero_${v.id_pasajero}` });
+    emitir(req, "conductor_en_camino", v, { room: `pasajero_${v.id_pasajero}` });
     // Conductor
     // emitir(req, "vas_al_encuentro", v, { room: `conductor_${conductorId}` });
 
@@ -536,13 +693,9 @@ export const llegarEncuentro = async (req, res) => {
 
     const v = viajeActualizado[0];
 
-    emitir(req, "conductor_llego_encuentro", v, {
-      room: `pasajero_${v.id_pasajero}`,
-    });
-
-    emitir(req, "llegaste_encuentro", v, {
-      room: `conductor_${id_conductor}`,
-    });
+    const payload = normalizarViajeSocket(v);
+emitir(req, "conductor_llego_encuentro", payload, { room: `pasajero_${v.id_pasajero}` });
+emitir(req, "llegaste_encuentro", payload, { room: `conductor_${id_conductor}` });
 
     return res.json({
       result: v,
@@ -604,8 +757,26 @@ export const comenzarViaje = async (req, res) => {
 
     const v = viajeActualizado[0];
 
-    emitir(req, "viaje_en_curso", v, { room: `pasajero_${v.id_pasajero}` });
-    emitir(req, "viaje_comenzado", v, { room: `conductor_${id_conductor}` });
+    const payload = normalizarViajeSocket(v);
+
+// ✅ agregar compat extra
+const payloadEnCurso = {
+  ...payload,
+  id_viaje: Number(v.id_viajes ?? id),   // <-- clave que muchos front usan
+  id_viajes: Number(v.id_viajes ?? id),
+  id_estado: Number(v.id_estado ?? ESTADOS.EN_CURSO),
+};
+
+const roomViaje = `viaje_${Number(v.id_viajes ?? id)}`;
+const roomPasajero = `pasajero_${v.id_pasajero}`;
+
+console.log("▶️ [comenzarViaje] emitiendo viaje_en_curso a:", roomPasajero, roomViaje);
+emitir(req, "viaje_en_curso", payloadEnCurso, { room: roomPasajero });
+emitir(req, "viaje_en_curso", payloadEnCurso, { room: roomViaje });
+emitir(req, "viaje_en_curso", payloadEnCurso, { room: `conductor_${id_conductor}` });
+
+
+
 
     return res.json({ result: v, message: "Viaje en curso" });
   } catch (error) {
@@ -652,16 +823,56 @@ export const finalizarViaje = async (req, res) => {
       });
     }
 
+    const modoCobro = (viaje.modo_cobro ?? "PACTADO").toString().toUpperCase();
+
+    // ✅ Regla: si es PACTADO, el precio final queda fijo = precio_pactado
+    // ✅ Si es TAXIMETRO, precio_final es obligatorio y lo setea el taxímetro
+    let precioFinalASetear = null;
+
+    if (modoCobro === "PACTADO") {
+      // si no hay precio_pactado por algún motivo, caemos a lo que ya tenga precio_final/estimado
+      const pactado = Number(viaje.precio_pactado ?? 0);
+      const existente = Number(viaje.precio_final ?? 0);
+
+      // Preferimos precio_pactado. Si está 0/null, mantenemos el existente.
+      precioFinalASetear = pactado > 0 ? pactado : (existente > 0 ? existente : 0);
+    } else {
+      // TAXIMETRO
+      const pf = Number(precio_final);
+      if (!Number.isFinite(pf) || pf <= 0) {
+        return res.status(400).json({
+          message: "precio_final es requerido y debe ser > 0 para viajes TAXIMETRO",
+        });
+      }
+      precioFinalASetear = pf;
+    }
+
     await connection.execute(
       `
       UPDATE viajes
       SET id_estado = ?,
           hora_fin = NOW(),
-          precio_final = COALESCE(?, precio_final)
+          precio_final = ?
       WHERE id_viajes = ?
       `,
-      [ESTADOS.FINALIZADO, precio_final, id]
+      [ESTADOS.FINALIZADO, precioFinalASetear, id]
     );
+
+    // ✅ Registrar comisión en deuda_conductor
+    const comision = precioFinalASetear * 0.20; // 20%
+    if (comision > 0) {
+      // Evitar duplicados (idempotencia)
+      const [checkDeuda] = await connection.execute(
+        "SELECT id_deuda FROM deuda_conductor WHERE id_viaje = ?",
+        [id]
+      );
+      if (checkDeuda.length === 0) {
+        await connection.execute(
+          `INSERT INTO deuda_conductor (id_conductor, id_viaje, monto, estado) VALUES (?, ?, ?, 'PENDING')`,
+          [id_conductor, id, comision]
+        );
+      }
+    }
 
     // conductor disponible
     await connection.execute(
@@ -676,8 +887,36 @@ export const finalizarViaje = async (req, res) => {
 
     const v = viajeActualizado[0];
 
-    emitir(req, "viaje_finalizado", v, { room: `pasajero_${v.id_pasajero}` });
-    emitir(req, "viaje_completado", v, { room: `conductor_${id_conductor}` });
+    // ✅ Payload normalizado (sin romper compatibilidad)
+    const payload = {
+      ...v,
+
+      // nuevos “claros”
+      modo_cobro: v.modo_cobro ?? modoCobro,
+      precio_pactado: v.precio_pactado == null ? null : Number(v.precio_pactado),
+      precio_final: v.precio_final == null ? null : Number(v.precio_final),
+      precio_estimado: v.precio_estimado == null ? null : Number(v.precio_estimado),
+
+      // compat vieja (si tus pantallas escuchan estas keys)
+      id_viajes: v.id_viajes,
+      id_pasajero: v.id_pasajero,
+      direccion_desde: v.direccion_desde,
+      direccion_hasta: v.direccion_hasta,
+      lat_desde: v.lat_desde == null ? null : Number(v.lat_desde),
+      lon_desde: v.lon_desde == null ? null : Number(v.lon_desde),
+      lat_hasta: v.lat_hasta == null ? null : Number(v.lat_hasta),
+      lon_hasta: v.lon_hasta == null ? null : Number(v.lon_hasta),
+
+      latDesde: v.lat_desde == null ? null : Number(v.lat_desde),
+      lonDesde: v.lon_desde == null ? null : Number(v.lon_desde),
+      latHasta: v.lat_hasta == null ? null : Number(v.lat_hasta),
+      lonHasta: v.lon_hasta == null ? null : Number(v.lon_hasta),
+      direccionDesde: v.direccion_desde ?? "",
+      direccionHasta: v.direccion_hasta ?? "",
+    };
+
+    emitir(req, "viaje_finalizado", payload, { room: `pasajero_${v.id_pasajero}` });
+    emitir(req, "viaje_completado", payload, { room: `conductor_${id_conductor}` });
 
     emitir(
       req,
@@ -699,6 +938,7 @@ export const finalizarViaje = async (req, res) => {
     if (connection) await connection.end();
   }
 };
+
 
 /** PUT /viajes/:id/cancelar - Cancelar viaje (pasajero o conductor) */
 export const cancelarViaje = async (req, res) => {
@@ -754,25 +994,25 @@ export const cancelarViaje = async (req, res) => {
         [id]
       );
       const v = rowsDespues[0];
-
+      const payload = normalizarViajeSocket(v);
       // si estaba buscando (5) => avisar conductores para quitarlo
       if (estadoAnterior === ESTADOS.BUSCANDO) {
         emitir(req, "viaje_cancelado_busqueda", { id_viajes: Number(id) }, { room: "conductores" });
       } else {
         // si ya había conductor, avisarle y liberarlo
         if (v.id_conductor) {
-          emitir(req, "viaje_cancelado_pasajero", v, { room: `conductor_${v.id_conductor}` });
+          emitir(req, "viaje_cancelado_pasajero", payload, { room: `conductor_${v.id_conductor}` });
 
           await connection.execute(
             "UPDATE conductores SET conectado = 1 WHERE id_usuario = ?",
-            [v.id_conductor]
+            [payload.id_conductor]
           );
-          emitir(req, "conductor_disponible", { id_conductor: v.id_conductor, conectado: true }, { room: "conductores" });
+          emitir(req, "conductor_disponible", { id_conductor: payload.id_conductor, conectado: true }, { room: "conductores" });
         }
       }
 
       // avisar pasajero
-      emitir(req, "viaje_cancelado", v, { room: `pasajero_${v.id_pasajero}` });
+      emitir(req, "viaje_cancelado", payload, { room: `pasajero_${v.id_pasajero}` });
 
       return res.json({ ok: true, message: "Viaje cancelado por pasajero", viaje: v });
     }
@@ -799,12 +1039,12 @@ export const cancelarViaje = async (req, res) => {
         const vActualizado = viajeActualizado[0];
 
         // avisar pasajero
-        emitir(req, "viaje_buscando_conductor", vActualizado, {
+        emitir(req, "viaje_buscando_conductor", normalizarViajeSocket(vActualizado), {
           room: `pasajero_${vActualizado.id_pasajero}`,
         });
 
         // avisar a conductores
-        emitir(req, "viaje_creado", vActualizado, { room: "conductores" });
+        emitir(req, "viaje_creado", normalizarViajeSocket(vActualizado), { room: "conductores" });
 
         // liberar conductor
         await connection.execute(
@@ -913,10 +1153,230 @@ export const getViajeActivo = async (req, res) => {
       return res.json({ ok: true, data: null });
     }
 
-    return res.json({ ok: true, data: rows[0] });
+    return res.json({ ok: true, data: normalizarViajeSocket(rows[0]) });
   } catch (error) {
     console.error("❌ getViajeActivo:", error);
     return res.status(500).json({ ok: false, message: error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
+
+/** GET /viajes/historial/:id_usuario  (Historial pasajero) */
+export const getHistorialViajesUsuario = async (req, res) => {
+  let connection;
+  try {
+    const idUsuario = Number(req.params.id_usuario);
+
+    if (!Number.isFinite(idUsuario) || idUsuario <= 0) {
+      return res.status(400).json({ ok: false, message: "id_usuario inválido" });
+    }
+
+    connection = await conectarBDMySql();
+
+    const sql = `
+      SELECT
+        v.id_viajes,
+        v.id_pasajero,
+        v.id_conductor,
+
+        v.direccion_desde  AS direccion_origen,
+        v.lat_desde        AS origen_lat,
+        v.lon_desde        AS origen_lng,
+
+        v.direccion_hasta  AS direccion_destino,
+        v.lat_hasta        AS destino_lat,
+        v.lon_hasta        AS destino_lng,
+
+        v.hora_inicio,
+        v.hora_fin,
+        
+        v.modo_cobro,
+        v.precio_pactado,
+
+        v.id_estado,
+        CASE v.id_estado
+          WHEN 1 THEN 'asignado'
+          WHEN 2 THEN 'en curso'
+          WHEN 3 THEN 'cancelado'
+          WHEN 4 THEN 'finalizado'
+          WHEN 5 THEN 'buscando'
+          WHEN 6 THEN 'en camino al encuentro'
+          WHEN 7 THEN 'esperando pasajero'
+          ELSE 'desconocido'
+        END AS estado,
+
+        v.id_tarifa,
+        v.precio_estimado,
+        v.precio_final,
+
+        -- ✅ Datos conductor (si existe)
+        u.nombre_usuario    AS conductor_nombre,
+        u.apellido_usuario  AS conductor_apellido,
+        u.telefono_usuario  AS telefono_conductor,
+        u.email_usuario     AS email_conductor,
+        u.foto_perfil       AS foto_perfil_conductor,
+
+        c.id_conductor,
+        c.matricula         AS patente,
+        c.marca_vehiculo,
+        c.modelo_vehiculo,
+        c.foto_conductor    AS foto_conductor,
+        c.foto_vehiculo     AS foto_vehiculo
+
+      FROM viajes v
+      LEFT JOIN usuarios u
+        ON u.id_usuario = v.id_conductor
+      LEFT JOIN conductores c
+        ON c.id_usuario = v.id_conductor
+
+      WHERE v.id_pasajero = ?
+      ORDER BY v.id_viajes DESC
+      LIMIT 200
+    `;
+
+    const [rows] = await connection.execute(sql, [idUsuario]);
+
+    return res.json({ ok: true, data: rows || [] });
+  } catch (error) {
+    console.error("❌ getHistorialViajesUsuario:", error);
+    return res.status(500).json({ ok: false, message: error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
+
+/** GET /viajes/historialConductor/:id_usuario  (Historial conductor) */
+export const getHistorialViajesConductor = async (req, res) => {
+  let connection;
+  try {
+    const idUsuario = Number(req.params.id_usuario);
+
+    if (!Number.isFinite(idUsuario) || idUsuario <= 0) {
+      return res.status(400).json({ ok: false, message: "id_usuario inválido" });
+    }
+
+    connection = await conectarBDMySql();
+
+    const sql = `
+      SELECT
+        v.id_viajes,
+        v.id_pasajero,
+        v.id_conductor,
+
+        v.direccion_desde  AS direccion_origen,
+        v.lat_desde        AS origen_lat,
+        v.lon_desde        AS origen_lng,
+
+        v.direccion_hasta  AS direccion_destino,
+        v.lat_hasta        AS destino_lat,
+        v.lon_hasta        AS destino_lng,
+
+        v.hora_inicio,
+        v.hora_fin,
+
+        v.id_estado,
+        CASE v.id_estado
+          WHEN 1 THEN 'asignado'
+          WHEN 2 THEN 'en curso'
+          WHEN 3 THEN 'cancelado'
+          WHEN 4 THEN 'finalizado'
+          WHEN 5 THEN 'buscando'
+          WHEN 6 THEN 'en camino al encuentro'
+          WHEN 7 THEN 'esperando pasajero'
+          ELSE 'desconocido'
+        END AS estado,
+
+        v.id_tarifa,
+        v.precio_estimado,
+        v.precio_final,
+
+        -- ✅ Datos del pasajero (usuarios)
+        u.nombre_usuario    AS pasajero_nombre,
+        u.apellido_usuario  AS pasajero_apellido,
+        u.telefono_usuario  AS pasajero_telefono,
+        u.email_usuario     AS pasajero_email,
+        u.foto_perfil       AS pasajero_foto
+
+      FROM viajes v
+      LEFT JOIN usuarios u
+        ON u.id_usuario = v.id_pasajero
+
+      WHERE v.id_conductor = ?
+      ORDER BY v.id_viajes DESC
+      LIMIT 200
+    `;
+
+    const [rows] = await connection.execute(sql, [idUsuario]);
+
+    return res.json({ ok: true, data: rows || [] });
+  } catch (error) {
+    console.error("❌ getHistorialViajesConductor:", error);
+    return res.status(500).json({ ok: false, message: error.message });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
+
+/** GET /viajes/:id/detalle  (detalle + conductor/pasajero) */
+export const getDetalleViaje = async (req, res) => {
+  let connection;
+  try {
+    const idViaje = Number(req.params.id);
+    if (!Number.isFinite(idViaje) || idViaje <= 0) {
+      return res.status(400).json({ ok: false, message: "id inválido" });
+    }
+
+    connection = await conectarBDMySql();
+
+    // Trae viaje + nombre/apellido del pasajero y conductor (si existe)
+    const [rows] = await connection.execute(
+      `
+      SELECT
+        v.*,
+
+        up.nombre_usuario   AS pasajero_nombre,
+        up.apellido_usuario AS pasajero_apellido,
+
+        uc.nombre_usuario   AS conductor_nombre,
+        uc.apellido_usuario AS conductor_apellido
+
+      FROM viajes v
+      LEFT JOIN usuarios up ON up.id_usuario = v.id_pasajero
+      LEFT JOIN usuarios uc ON uc.id_usuario = v.id_conductor
+      WHERE v.id_viajes = ?
+      LIMIT 1
+      `,
+      [idViaje]
+    );
+
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ ok: false, message: "Viaje no encontrado" });
+    }
+
+    const r = rows[0];
+
+    return res.json({
+      ok: true,
+      data: {
+        ...normalizarViajeSocket(r),
+        pasajero: {
+          id_usuario: r.id_pasajero,
+          nombre: r.pasajero_nombre ?? "",
+          apellido: r.pasajero_apellido ?? "",
+        },
+        conductor: r.id_conductor
+          ? {
+              id_usuario: r.id_conductor,
+              nombre: r.conductor_nombre ?? "",
+              apellido: r.conductor_apellido ?? "",
+            }
+          : null,
+      },
+    });
+  } catch (e) {
+    console.error("❌ getDetalleViaje:", e);
+    return res.status(500).json({ ok: false, message: e.message });
   } finally {
     if (connection) await connection.end();
   }
