@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { conectarBDMySql } from "../config/dbMYSQL.js";
-import { OAuth2Client } from "google-auth-library";
+import { auth, OAuth2Client } from "google-auth-library";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -68,28 +68,48 @@ export const login = async (req, res) => {
   try {
     connection = await conectarBDMySql();
     const [rows] = await connection.execute(
-      "SELECT * FROM usuarios WHERE email_usuario = ?",
+      "SELECT u.*, g.nombre_genero, r.nombre_rol FROM usuarios u LEFT JOIN generos g ON u.id_genero = g.id_genero LEFT JOIN roles r ON u.id_rol = r.id_rol WHERE u.email_usuario = ?",
       [email],
     );
-    console.log(rows);
+
+    // console.log(rows);
     if (rows.length === 0)
       return res.status(404).json({ message: "Usuario no encontrado." });
 
     const user = rows[0];
-
-    const validPassword = await bcrypt.compare(password, user.password);
+    const validPassword = password === user.password;
+    // const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword)
       return res.status(401).json({ message: "Contraseña incorrecta." });
 
+    console.log(password == user.password);
     const token = jwt.sign(
       { id_usuario: user.id_usuario, email: user.email_usuario },
       process.env.JWT_SECRET,
       { expiresIn: "7d" },
     );
 
+    const usuarioSeguro = {
+      id_usuario: user.id_usuario,
+      nombre_usuario: user.nombre_usuario,
+      apellido_usuario: user.apellido_usuario,
+      email_usuario: user.email_usuario,
+      dni: user.dni,
+      fecha_nacimiento: user.fecha_nacimiento,
+      telefono: user.telefono_usuario,
+      id_genero: user.id_genero,
+      nombre_genero: user.nombre_genero,
+      id_rol: user.id_rol,
+      nombre_rol: user.nombre_rol,
+      foto_perfil: user.foto_perfil,
+      auth_prvider: user.auth_prvider,
+      estado: user.estado,
+      habilita: user.habilita,
+    };
+
     console.log(user, "Login");
     res.json({
-      result: user,
+      result: usuarioSeguro,
       token,
       message: "Inicio de sesión exitoso.",
     });
