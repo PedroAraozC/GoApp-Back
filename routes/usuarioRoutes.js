@@ -9,7 +9,8 @@ import{
   google_login,
   rollbackUsuario,
   confirmarUsuario,
-  editarRolUsuario
+  editarRolUsuario,
+  loginBackOffice
 } from"../controllers/userControllers.js";
 
 const router = Router();
@@ -21,6 +22,7 @@ router.post("/crearUsuario", crearUsuario);
 router.put("/actualizarUsuario/:id", actualizarUsuario);
 router.put("/eliminarUsuario/:id", eliminarUsuario);
 router.post("/login", login);
+router.post("/loginBackOffice", loginBackOffice);
 router.post("/google_login", google_login);
 router.delete("/rollback/:id_usuario", rollbackUsuario);
 router.put("/confirmar/:id_usuario", confirmarUsuario)
