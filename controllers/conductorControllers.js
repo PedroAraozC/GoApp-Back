@@ -157,7 +157,7 @@ export const obtenerCarnetConductor = async (req, res) => {
         c.matricula       AS matricula,
         c.marca_vehiculo  AS marca_vehiculo,
         c.modelo_vehiculo AS modelo_vehiculo,
-
+        
         -- ✅ CAMBIO ACÁ (antes era c.created_at)
         u.fecha_carga AS created_at,
 
