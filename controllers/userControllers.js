@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const client = new OAuth2Client(
-  "125703789007-thjq5cpij6blij34sv8g404pq6ubnhjv.apps.googleusercontent.com",
+  "125703789007-m6785nj61t63qvdjkok8qokrd9tsdoog.apps.googleusercontent.com",
 );
 
 export const obtenerUsuarios = async (req, res) => {
@@ -128,13 +128,22 @@ export const google_login = async (req, res) => {
       [email, google_id],
     );
 
+    console.log({
+  name,
+  email,
+  google_id,
+  picture,
+});
+
+const safePicture = picture || null;
+
     let user;
     if (existingUser.length > 0) {
       user = existingUser[0];
     } else {
       const [result] = await connection.execute(
-        "INSERT INTO usuarios (nombre_usuario, email_usuario, google_id, foto_perfil, auth_prvider) VALUES (?, ?, ?, ?, ?)",
-        [name, email, google_id, picture, "google"],
+        "INSERT INTO usuarios (nombre_usuario, email_usuario, google_id, foto_perfil, auth_provider) VALUES (?, ?, ?, ?, ?)",
+        [name, email, google_id, safePicture, "google"],
       );
       const [newUser] = await connection.execute(
         "SELECT * FROM usuarios WHERE id_usuario = ?",
