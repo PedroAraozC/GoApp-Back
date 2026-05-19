@@ -19,6 +19,7 @@ export default function setupSocket(server, app) {
 
   // Guardamos io en Express para usarlo en los controladores (viajesControllers, etc.)
   app.set("io", io);
+  const choferesActivos = new Map();
 
   io.on("connection", (socket) => {
     console.log("🟢 Cliente conectado:", socket.id);
@@ -169,54 +170,77 @@ export default function setupSocket(server, app) {
     // ================================
     socket.on("disconnect", (reason) => {
       console.log("🔴 Cliente desconectado:", socket.id, "Motivo:", reason);
+      const id = socket.data?.id_usuario;
+      const tipo = socket.data?.tipo;
+
+      if (tipo === "conductor" && id) {
+        choferesActivos.delete(id);
+
+        io.emit("choferes_ubicacion", Array.from(choferesActivos.values()));
+      }
       // Podrías usar socket.data.id_usuario / tipo si querés hacer limpieza extra
     });
 
     // ========================================
-// SEGUIMIENTO EN TIEMPO REAL DE UBICACIÓN
-// ========================================
-socket.on("ubicacion_actualizada", (data) => {
-  const idViaje = data?.id_viaje ?? data?.idViaje ?? data?.id_viajes ?? data?.id;
-  const lat = data?.lat;
-  const lng = data?.lng;
-  const idUsuario = data?.id_usuario ?? data?.idUsuario;
-  const tipo = data?.tipo;
+    // SEGUIMIENTO EN TIEMPO REAL DE UBICACIÓN
+    // ========================================
+    socket.on("ubicacion_actualizada", (data) => {
+      const idViaje =
+        data?.id_viaje ?? data?.idViaje ?? data?.id_viajes ?? data?.id;
+      const lat = data?.lat;
+      const lng = data?.lng;
+      const idUsuario = data?.id_usuario ?? data?.idUsuario;
+      const tipo = data?.tipo;
 
-  if (idViaje == null || lat == null || lng == null || idUsuario == null || !tipo) {
-    console.log("❌ ubicacion_actualizada datos incompletos", data);
-    return;
-  }
+      if (
+        idViaje == null ||
+        lat == null ||
+        lng == null ||
+        idUsuario == null ||
+        !tipo
+      ) {
+        console.log("❌ ubicacion_actualizada datos incompletos", data);
+        return;
+      }
 
-  const room = `viaje_${idViaje}`;
+      // 🔥 SOLO choferes
+      if (tipo === "conductor") {
+        choferesActivos.set(idUsuario, {
+          id: idUsuario,
+          lat: Number(lat),
+          lng: Number(lng),
+        });
 
-  io.to(room).emit("ubicacion_en_tiempo_real", {
-    id_viaje: Number(idViaje),
-    lat: Number(lat),
-    lng: Number(lng),
-    id_usuario: Number(idUsuario),
-    tipo,
-    timestamp: new Date().toISOString(),
-  });
-});
+        // 🔥 EMITE A TODO EL BACKOFFICE
+        io.emit("choferes_ubicacion", Array.from(choferesActivos.values()));
+      }
 
-// ================================
-// BOTÓN ANTIPÁNICO 911
-// ================================
-socket.on("panic_911", (data) => {
-  const { id_usuario, lat, lng, ts } = data || {};
-  console.log("🚨 PANIC 911:", { id_usuario, lat, lng, ts });
+      const room = `viaje_${idViaje}`;
 
-  io.to("admins").emit("panic_911", {
-    id_usuario,
-    lat: lat != null ? Number(lat) : null,
-    lng: lng != null ? Number(lng) : null,
-    ts: ts || new Date().toISOString(),
-  });
-});
+      io.to(room).emit("ubicacion_en_tiempo_real", {
+        id_viaje: Number(idViaje),
+        lat: Number(lat),
+        lng: Number(lng),
+        id_usuario: Number(idUsuario),
+        tipo,
+        timestamp: new Date().toISOString(),
+      });
+    });
 
+    // ================================
+    // BOTÓN ANTIPÁNICO 911
+    // ================================
+    socket.on("panic_911", (data) => {
+      const { id_usuario, lat, lng, ts } = data || {};
+      console.log("🚨 PANIC 911:", { id_usuario, lat, lng, ts });
 
-
-
+      io.to("admins").emit("panic_911", {
+        id_usuario,
+        lat: lat != null ? Number(lat) : null,
+        lng: lng != null ? Number(lng) : null,
+        ts: ts || new Date().toISOString(),
+      });
+    });
   });
 
   return io;

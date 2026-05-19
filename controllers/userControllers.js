@@ -119,30 +119,28 @@ export const login = async (req, res) => {
     if (connection) await connection.end();
   }
 };
+
 export const loginBackOffice = async (req, res) => {
   let connection;
   let { email_usuario, password } = req.body;
   try {
     connection = await conectarBDMySql();
-    console.log(req.body, "as");
-   
+
     const [rows] = await connection.execute(
       "SELECT u.*, g.nombre_genero, r.nombre_rol FROM usuarios u LEFT JOIN generos g ON u.id_genero = g.id_genero LEFT JOIN roles r ON u.id_rol = r.id_rol WHERE u.email_usuario = ?",
       [email_usuario],
     );
 
-    console.log(rows);
     if (rows.length === 0)
       return res.status(404).json({ message: "Usuario no encontrado." });
 
     const user = rows[0];
-    console.log(user.password,"esese")
     // const validPassword = password === user.password;
     const validPassword = await bcrypt.compare(password, user.password);
-    console.log(validPassword, "as");
+    
     if (!validPassword)
       return res.status(401).json({ message: "Contraseña incorrecta." });
-    console.log(password == user.password);
+
     const token = jwt.sign(
       { id_usuario: user.id_usuario, email: user.email_usuario },
       process.env.JWT_SECRET,
