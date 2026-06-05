@@ -227,6 +227,49 @@ export const obtenerCarnetConductor = async (req, res) => {
   }
 };
 
+export const eliminarImagen = async (req, res) => {
+  const { id_conductor, tipo_imagen } = req.query;
+  let connection;
+
+  try {
+    connection = await conectarBDMySql();
+
+    const [rows] = await connection.execute(
+      "SELECT ruta_archivo FROM conductor_imagenes WHERE id_conductor = ? AND tipo_imagen = ?",
+      [id_conductor, tipo_imagen],
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ message: "Imagen no encontrada" });
+    }
+
+    const ruta = rows[0].ruta_archivo;
+
+    // 🔥 Eliminar archivo físico
+    const fs = await import("fs");
+    const path = await import("path");
+
+    const rutaNormalizada = ruta.replace(/\\/g, "/").replace(/^\/+/, "");
+    const rutaFisica = path.join(process.cwd(), rutaNormalizada);
+    if (fs.existsSync(rutaFisica)) {
+      fs.unlinkSync(rutaFisica);
+    }
+    if (!fs.existsSync(rutaFisica)) {
+      console.warn("Archivo no encontrado en:", rutaFisica);
+    }
+    // 🔥 Eliminar registro
+    await connection.execute(
+      "DELETE FROM conductor_imagenes WHERE id_conductor = ? AND tipo_imagen = ?",
+      [id_conductor, tipo_imagen],
+    );
+
+    res.json({ message: "Imagen eliminada correctamente" });
+  } catch (error) {
+    res.status(500).json({ message: "Error al eliminar imagen" });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
 
 export const subirImagenConductor = async (req, res) => {
   let connection;
@@ -248,7 +291,7 @@ export const subirImagenConductor = async (req, res) => {
       `UPDATE conductor_imagenes
        SET activa = 0
        WHERE id_conductor = ? AND tipo_imagen = ? AND activa = 1`,
-      [id_conductor, tipo_imagen]
+      [id_conductor, tipo_imagen],
     );
 
     // ✅ Insertar la nueva imagen
@@ -661,23 +704,26 @@ export const obtenerDetalleConductor = async (req, res) => {
     // 4️⃣ Imágenes del conductor (si existen)
     const [imagenes] = await connection.execute(
       `
-      SELECT
-        tipo_imagen,
-        ruta_archivo
-      FROM conductor_imagenes
-      WHERE id_conductor = ?
-        AND activa = 1
-      `,
+  SELECT
+    tipo_imagen,
+    ruta_archivo
+  FROM conductor_imagenes
+  WHERE id_conductor = ?
+    AND activa = 1
+  `,
       [conductor.id_conductor],
     );
-
+    const imagenesFormateadas = imagenes.map((img) => ({
+      ...img,
+      ruta_archivo: img.ruta_archivo.replace(/\\/g, "/"), // 🔥 convertir backslash a slash
+    }));
     // 5️⃣ Armar respuesta final
     return res.json({
       result: {
         ...usuarios[0],
         ...conductor,
         validacion: validacion[0] || null,
-        imagenes: imagenes || [],
+        imagenes: imagenesFormateadas || [],
       },
     });
   } catch (error) {

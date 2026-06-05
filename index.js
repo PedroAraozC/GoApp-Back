@@ -44,6 +44,7 @@ app.use("/generos", generoRoutes);
 app.use("/viajes", viajesRoutes);
 app.use("/chat", chatRoutes);
 app.use("/uploads", express.static(path.join(__dirname, "imagenes")));
+app.use("/imagenes", express.static(path.join(__dirname, "imagenes")));
 app.use("/tipoVehiculo", tipoVehiculoRoutes);
 app.use("/tarifas", tarifaRoutes);
 app.use("/calificaciones", calificacionesRoutes);

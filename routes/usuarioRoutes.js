@@ -1,5 +1,5 @@
-import { Router } from"express";
-import{
+import { Router } from "express";
+import {
   obtenerUsuarios,
   obtenerUsuarioId,
   crearUsuario,
@@ -9,20 +9,30 @@ import{
   google_login,
   rollbackUsuario,
   confirmarUsuario,
-  editarRolUsuario
-} from"../controllers/userControllers.js";
+  editarUsuarioWeb,
+  loginBackOffice,
+  verifyTokenBackOffice,
+  crearUsuarioWeb,
+} from "../controllers/userControllers.js";
+import { authWeb } from "../middlewares/authWeb.js";
 
 const router = Router();
 
-router.get("/obtenerUsuarios", obtenerUsuarios);
-router.put("/editarRolUsuario", editarRolUsuario);
 router.get("/obtenerUsuarioId/:id", obtenerUsuarioId);
 router.post("/crearUsuario", crearUsuario);
 router.put("/actualizarUsuario/:id", actualizarUsuario);
-router.put("/eliminarUsuario/:id", eliminarUsuario);
 router.post("/login", login);
 router.post("/google_login", google_login);
 router.delete("/rollback/:id_usuario", rollbackUsuario);
-router.put("/confirmar/:id_usuario", confirmarUsuario)
+router.put("/confirmar/:id_usuario", confirmarUsuario);
+
+//WEB BACKOFFICE
+
+router.post("/loginBackOffice", loginBackOffice);
+router.get("/verifyToken", authWeb, verifyTokenBackOffice);
+router.get("/obtenerUsuarios", authWeb, obtenerUsuarios);
+router.put("/editarUsuarioWeb", authWeb, editarUsuarioWeb);
+router.put("/eliminarUsuario/:id", authWeb, eliminarUsuario);
+router.post("/crearUsuarioWeb", authWeb, crearUsuarioWeb);
 
 export default router;

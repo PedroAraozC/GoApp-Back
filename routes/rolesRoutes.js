@@ -6,13 +6,15 @@ import {
   eliminarRol,
   obtenerRolAdmin,
 } from "../controllers/rolesControllers.js";
+import { authWeb } from "../middlewares/authWeb.js";
 
 const router = Router();
 
-router.get("/obtenerRol", obtenerRol);
-router.get("/obtenerRolAdmin", obtenerRolAdmin);
-router.post("/altaRol", altaRol);
-router.put("/editaGenero", editaRol);
-router.put("/eliminarRol", eliminarRol);
+//WEB BACKOFFICE
+router.get("/obtenerRolAdmin", authWeb, obtenerRolAdmin);
+router.post("/altaRol", authWeb, altaRol);
+router.put("/editaGenero", authWeb, editaRol);
+router.put("/eliminarRol", authWeb, eliminarRol);
+router.get("/obtenerRol", authWeb, obtenerRol);
 
 export default router;
