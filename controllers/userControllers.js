@@ -55,12 +55,70 @@ export const login = async (req, res) => {
       return res.status(404).json({ message: "Usuario no encontrado." });
 
     const user = rows[0];
-    const validPassword = password === user.password;
-    // const validPassword = await bcrypt.compare(password, user.password);
+    // const validPassword = password === user.password;
+    console.log(validPassword, "as");
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword)
+      return res.status(401).json({ message: "Contraseña incorrecta." });
+    console.log(password == user.password);
+    const token = jwt.sign(
+      { id_usuario: user.id_usuario, email: user.email_usuario },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" },
+    );
+
+    const usuarioSeguro = {
+      id_usuario: user.id_usuario,
+      nombre_usuario: user.nombre_usuario,
+      apellido_usuario: user.apellido_usuario,
+      email_usuario: user.email_usuario,
+      dni: user.dni,
+      fecha_nacimiento: user.fecha_nacimiento,
+      telefono: user.telefono_usuario,
+      id_genero: user.id_genero,
+      nombre_genero: user.nombre_genero,
+      id_rol: user.id_rol,
+      nombre_rol: user.nombre_rol,
+      foto_perfil: user.foto_perfil,
+      auth_prvider: user.auth_prvider,
+      estado: user.estado,
+      habilita: user.habilita,
+    };
+
+    console.log(user, "Login");
+    res.json({
+      result: usuarioSeguro,
+      token,
+      message: "Inicio de sesión exitoso.",
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Error en el login." });
+  } finally {
+    if (connection) await connection.end();
+  }
+};
+
+export const loginBackOffice = async (req, res) => {
+  let connection;
+  let { email_usuario, password } = req.body;
+  try {
+    connection = await conectarBDMySql();
+
+    const [rows] = await connection.execute(
+      "SELECT u.*, g.nombre_genero, r.nombre_rol FROM usuarios u LEFT JOIN generos g ON u.id_genero = g.id_genero LEFT JOIN roles r ON u.id_rol = r.id_rol WHERE u.email_usuario = ?",
+      [email_usuario],
+    );
+
+    if (rows.length === 0)
+      return res.status(404).json({ message: "Usuario no encontrado." });
+
+    const user = rows[0];
+    // const validPassword = password === user.password;
+    const validPassword = await bcrypt.compare(password, user.password);
+    
     if (!validPassword)
       return res.status(401).json({ message: "Contraseña incorrecta." });
 
-    console.log(password == user.password);
     const token = jwt.sign(
       {
         id_usuario: user.id_usuario,
@@ -194,7 +252,6 @@ export const crearUsuario = async (req, res) => {
       password,
       id_rol,
     } = req.body;
-
     connection = await conectarBDMySql();
 
     // validaciones básicas
